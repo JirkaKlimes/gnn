@@ -18,11 +18,14 @@ class Gnn:
         self.N_outputs = N_outputs
 
         self._create_digraph()
+        self._create_weights()
 
     def _create_digraph(self):
         """
-        example of directed graph
+        Represents connection of neurons
         
+        example of directed graph
+
         activation | state | order |   inputs  
         -----------|-------|-------|---|---|---
                  1 |     1 |    -1 | -1| -1| -1
@@ -38,7 +41,7 @@ class Gnn:
         order: float
             indicated in which "pseudo" layer is the neuron located
             neurons with order -1 will never be calculated (input neurons)
-            neurons with order 0 will be calculated first (input neurons)
+            neurons with order 0 will be calculated first
             neurons with order 1 will be calculated last (output neurons)
         inputs: int
             indicies of connected neurons
@@ -50,13 +53,25 @@ class Gnn:
         digraph = np.zeros((self.N_inputs + self.N_outputs, 3))
         digraph[:self.N_inputs, 2] = -1 # order -1 for inputs
         digraph[-self.N_outputs:, 2] = 1 # order 1 for outputs
-
         self.digraph = digraph
 
+        """
+        Array of unique order values
+        """
+        self.order_values = np.arange(2)
 
+    def _create_weights(self):
+        """
+        first weight is the bias term
+        we create the digraph without any connections
+            so we only need biases for output neurons
+        """
+        weights = np.zeros((self.N_outputs, 1))
+        self.weights = weights
 
 if __name__ == "__main__":
     gnn = Gnn(4, 2)
     gnn._create_digraph()
 
     print(gnn.digraph)
+    print(gnn.weights)
