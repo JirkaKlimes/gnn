@@ -56,7 +56,7 @@ class Gnn:
         self.digraph = digraph
 
         """
-        Array of unique order values
+        Array of unique order values for faster computation
         """
         self.order_values = np.arange(2)
 
@@ -68,6 +68,12 @@ class Gnn:
         """
         weights = np.zeros((self.N_outputs, 1))
         self.weights = weights
+
+    def add_connection(self, fromN: int, toN: int):
+        pass
+
+    def add_neuron(self, fromN: int, toN: int, order: float):
+        pass
 
 if __name__ == "__main__":
     gnn = Gnn(4, 2)
