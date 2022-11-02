@@ -63,3 +63,17 @@ class Kelu(Activation):
     def grad(self, z):
         e = np.e
         return (z*e**(1-e*z))/((e**(-e*z) + 1)**2)+1/(e**(-e*z) + 1)+self.alpha 
+
+class Tanh(Activation):
+    def __init__(self):
+        """A hyperbolic tangent activation function."""
+        super().__init__()
+
+    def __str__(self):
+        return "Tanh"
+
+    def fn(self, z):
+        return np.tanh(z)
+
+    def grad(self, x):
+        return 1 - np.tanh(x) ** 2
