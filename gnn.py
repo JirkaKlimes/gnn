@@ -57,6 +57,7 @@ class Gnn:
 
         # stores all used activation function
         self.activations = []
+        self.loss_fn = None
 
     def _expand_inputs(self, n: int = 1):
         """
@@ -98,6 +99,8 @@ class Gnn:
         input_index = self._new_input_index(toN)
         self.digraph[toN][input_index] = fromN
 
+        return input_index
+
     def add_neuron(self, fromN: int, toN: int, order: float, activation_function: int):
         """
         adds new neuron to the digraph
@@ -134,16 +137,6 @@ class Gnn:
 
         self.order_values = sorted(self.order_values + [value])
 
-    # this method will be moved to trainer class
-    def fully_connect(self):
-        """
-        connected all inputs to all output neurons
-        like in regular dense layer
-        """
-        for i in range(self.N_inputs):
-            for o in range(self.N_outputs):
-                self.add_connection(i, o+self.N_inputs)
-
     def remove_neuron(self, index):
         if index < self.N_inputs:
             raise Exception("Can't remove input neuron.")
@@ -152,7 +145,6 @@ class Gnn:
 
         raise NotImplementedError
 
-    # this method will be rewritten as gpu kernel
     def push(self, x):
         """
         Propagates single inputs through the network
@@ -194,19 +186,57 @@ class Gnn:
 
         return self.activations[self.N_inputs:self.N_inputs+self.N_outputs]
 
+    def backprop(self, x, y):
+        """
+        Find gradient of weights and biases for single input
+        """
+
+        # forward pass
+        self.push(x)
+
+        # list to store weights and biases gradients
+        self.biases_grad = np.zeros_like(self.biases)
+        self.weights_grad = np.zeros_like(self.weights)
+
+        # get unique order values and sorts them backwards + removes -1
+        order_values = sorted(set(self.order), reverse=True)[:1]
+
+        # loops over all order values
+        for order in order_values:
+            # loops over all neurons with current order value
+            curent_neuron_indicies = np.where(self.order == order)[0]
+            for neuron_index in curent_neuron_indicies:
+                # if neuron is output neuron
+                if order == 1:
+                    # gets gradient of the loss function
+                    output_index = neuron_index-self.N_inputs
+                    loss_grad = self.loss_fn.grad(y[output_index], self.activations[neuron_index])
+                    # multiplies loss gradient by gradient of activation function
+                    b_grad = self.activation_functions[self.activation_functions_ids[neuron_index]].grad(self.z[neuron_index]) * loss_grad
+
+                    # stores bias gradient
+                    self.biases_grad[neuron_index] = b_grad
+
+                    # loops over all inputs to current neuron
+                    for input_neuron_index in self.digraph[neuron_index]:
+                            if input_neuron_index == -1:
+                                continue
+                            input_neuron_index = int(input_neuron_index)
+                            
+                            # multiplies activation of input neuron and bias gradient to get weight gradient
+                            activation = self.activations[input_neuron_index]
+                            w_grad = activation * b_grad
+
+                            # stores weight gradient
+                            self.weights_grad[neuron_index, input_neuron_index] = w_grad
+
+                else:
+                    pass
+
+        return self.biases_grad, self.weights_grad
 
 if __name__ == "__main__":
-    np.random.seed(1)
-
-    gnn = Gnn(2, 2)
-
-    gnn.fully_connect()
-    gnn.add_neuron(0, 3, 0.5, 0)
-    gnn.weights += np.random.normal(size=gnn.weights.shape)
-
-    out = gnn.push(np.array([[1, 1]]))
-    print(out)
-
+    pass
 
 
 
