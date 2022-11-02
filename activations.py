@@ -58,11 +58,11 @@ class Kelu(Activation):
 
     def fn(self, z):
         e = np.e
-        return (z / 1 + z**(-e*z)) + self.alpha*z
+        return (z / 1 + z ** ( -e * z)) + self.alpha * z
     
     def grad(self, z):
         e = np.e
-        return (z*e**(1-e*z))/((e**(-e*z) + 1)**2)+1/(e**(-e*z) + 1)+self.alpha 
+        return (z * e ** (1 - e * z)) / ((e ** ( -e * z) + 1) ** 2) + 1 / (e ** ( -e * z) + 1) + self.alpha
 
 class Tanh(Activation):
     def __init__(self):
