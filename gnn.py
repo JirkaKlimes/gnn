@@ -19,8 +19,6 @@ class Gnn:
 
         self._initialize_network()
 
-        self.activation_functions = [Sigmoid()]
-
     def _initialize_network(self):
         """
         Initializes network parameters
@@ -47,7 +45,6 @@ class Gnn:
         # neurons with order 1 will be calculated last (output neurons)
         self.order[self.N_inputs:] = 1
 
-
         # indicies of connected neurons
         # input -1 is not connected (inputs of input neurons should always be -1)
         self.digraph = np.zeros((self.N_inputs+self.N_outputs, 1), dtype=np.int32) - 1
@@ -57,6 +54,9 @@ class Gnn:
 
         # weights for the neurons
         self.weights = np.zeros((self.N_inputs+self.N_outputs, 1))
+
+        # stores all used activation function
+        self.activations = []
 
     def _expand_inputs(self, n: int = 1):
         """
@@ -134,7 +134,7 @@ class Gnn:
 
         self.order_values = sorted(self.order_values + [value])
 
-    # this method will be moved to optimizer class
+    # this method will be moved to trainer class
     def fully_connect(self):
         """
         connected all inputs to all output neurons
@@ -167,6 +167,7 @@ class Gnn:
 
         # get unique order values and sorts them + removes -1
         order_values = sorted(set(self.order))[1:]
+
         # loops over all order values
         for order in order_values:
 
@@ -190,7 +191,7 @@ class Gnn:
                 # updates values in digraph
                 self.z[neuron_index] = z
                 self.activations[neuron_index] = activation
-        
+
         return self.activations[self.N_inputs:self.N_inputs+self.N_outputs]
 
 
