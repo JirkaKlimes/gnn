@@ -57,12 +57,13 @@ class Kelu(Activation):
         return f"KeLU (alpha={self.alpha})"
 
     def fn(self, z):
-        e = np.e
-        return (z / 1 + z ** ( -e * z)) + self.alpha * z
-    
+        pi, sqrt, tanh = np.pi, np.sqrt, np.tanh
+
+        # return 0.5 * z * (1 + tanh(sqrt(2 / pi) * (z + 0.044715 * z ** 3)))
+
     def grad(self, z):
-        e = np.e
-        return (z * e ** (1 - e * z)) / ((e ** ( -e * z) + 1) ** 2) + 1 / (e ** ( -e * z) + 1) + self.alpha
+        pi, sqrt, tanh = np.pi, np.sqrt, np.tanh
+
 
 class Tanh(Activation):
     def __init__(self):
