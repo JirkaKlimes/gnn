@@ -1,5 +1,4 @@
 import numpy as np
-from activations import Sigmoid
 
 class Gnn:
     def __init__(self, N_inputs: int, N_outputs: int):
@@ -67,7 +66,7 @@ class Gnn:
         """
         new_inputs = np.zeros((self.digraph.shape[0], n)) - 1
         self.digraph = np.hstack([self.digraph, new_inputs])
-
+        
         new_weights = np.zeros((self.weights.shape[0], n))
         self.weights = np.hstack([self.weights, new_weights])
 
@@ -199,18 +198,22 @@ class Gnn:
         self.weights_grad = np.zeros_like(self.weights)
 
         # get unique order values and sorts them backwards + removes -1
-        order_values = sorted(set(self.order), reverse=True)[:1]
+        order_values = sorted(set(self.order), reverse=True)[:-1]
 
         # loops over all order values
         for order in order_values:
+            
             # loops over all neurons with current order value
             curent_neuron_indicies = np.where(self.order == order)[0]
             for neuron_index in curent_neuron_indicies:
+                
                 # if neuron is output neuron
                 if order == 1:
+                    
                     # gets gradient of the loss function
                     output_index = neuron_index-self.N_inputs
                     loss_grad = self.loss_fn.grad(y[output_index], self.activations[neuron_index])
+                    
                     # multiplies loss gradient by gradient of activation function
                     b_grad = self.activation_functions[self.activation_functions_ids[neuron_index]].grad(self.z[neuron_index]) * loss_grad
 
@@ -218,20 +221,53 @@ class Gnn:
                     self.biases_grad[neuron_index] = b_grad
 
                     # loops over all inputs to current neuron
-                    for input_neuron_index in self.digraph[neuron_index]:
-                            if input_neuron_index == -1:
-                                continue
-                            input_neuron_index = int(input_neuron_index)
-                            
-                            # multiplies activation of input neuron and bias gradient to get weight gradient
-                            activation = self.activations[input_neuron_index]
-                            w_grad = activation * b_grad
+                    for input_index, input_neuron_index in enumerate(self.digraph[neuron_index]):
+                        if input_neuron_index == -1:
+                            continue
+                        input_neuron_index = int(input_neuron_index)
+                        
+                        # multiplies activation of input neuron and bias gradient to get weight gradient
+                        activation = self.activations[input_neuron_index]
+                        w_grad = activation * b_grad
 
-                            # stores weight gradient
-                            self.weights_grad[neuron_index, input_neuron_index] = w_grad
+                        # stores weight gradient
+                        self.weights_grad[neuron_index, input_index] = w_grad
 
                 else:
-                    pass
+
+                    delta_sum = 0
+
+                    # finds all neurons that use output of current neuron
+                    for next_neuron_index, next_neuron in enumerate(self.digraph):
+                        if neuron_index in next_neuron:
+
+                            # gets weight of the connection
+                            weight_index = np.where(next_neuron == neuron_index)[0][0]
+                            weight = self.weights[next_neuron_index, weight_index]
+
+                            # multiples weight by the gradient and adds to sum
+                            delta = weight * self.biases_grad[neuron_index]
+                            delta_sum += delta
+
+                    # multiplies the sum of gradients by gradient of the activation function
+                    b_grad = delta_sum * self.activation_functions[self.activation_functions_ids[neuron_index]].grad(self.z[neuron_index])
+                    
+                    # stores bias gradient
+                    self.biases_grad[neuron_index] = b_grad
+
+                    # loops over all inputs to current neuron
+                    for input_index, input_neuron_index in enumerate(self.digraph[neuron_index]):
+                        if input_neuron_index == -1:
+                            continue
+                        input_neuron_index = int(input_neuron_index)
+
+                        # multiplies activation of input neuron and bias gradient to get weight gradient
+                        activation = self.activations[input_neuron_index]
+                        w_grad = activation * b_grad
+
+                        # stores weight gradient
+                        self.weights_grad[neuron_index, input_index] = w_grad
+
 
         return self.biases_grad, self.weights_grad
 
