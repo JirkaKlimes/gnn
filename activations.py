@@ -78,3 +78,31 @@ class Tanh(Activation):
 
     def grad(self, x):
         return 1 - np.tanh(x) ** 2
+
+class LeakyReLU(Activation):
+    def __init__(self, alpha=0.1):
+        self.alpha = alpha
+        super().__init__()
+
+    def __str__(self):
+        return f"Leaky ReLU(alpha={self.alpha})"
+
+    def fn(self, z):
+        return z*self.alpha if z < 0 else z
+
+    def grad(self, z):
+        return self.alpha if z < 0 else 1
+
+
+class Identity(Activation):
+    def __init__(self):
+        super().__init__()
+
+    def __str__(self):
+        return "Identity"
+
+    def fn(self, z):
+        return z
+
+    def grad(self, x):
+        return np.ones_like(x)
