@@ -29,9 +29,6 @@ class Gnn:
         # z passed through activation function (initialized as 0s)
         # self.activations = np.zeros((self.N_inputs+self.N_outputs, 1))
 
-        # types of activation functions neurons use
-        self.activation_functions_ids = np.zeros((self.N_inputs+self.N_outputs), np.uint8)
-
         # indicates order of network computation
         self.order = np.zeros((self.N_inputs+self.N_outputs))
 
@@ -54,8 +51,10 @@ class Gnn:
         # weights for the neurons
         self.weights = np.zeros((self.N_inputs+self.N_outputs, 1))
 
-        # stores all used activation function
-        self.activations = []
+        # stores activation functions
+        self.hidden_act_fn = None
+        self.output_act_fn = None
+
         self.loss_fn = None
 
     def _expand_inputs(self, n: int = 1):
@@ -81,6 +80,10 @@ class Gnn:
         self._expand_inputs()
         return self.digraph.shape[1] - 1
 
+    @property
+    def order_values(self):
+        return sorted(set(self.order), reverse=True)
+
     def add_connection(self, fromN: int, toN: int):
         """
         adds connection between two neurons to the digraph
@@ -100,7 +103,7 @@ class Gnn:
 
         return input_index
 
-    def add_neuron(self, fromN: int, toN: int, order: float, activation_function: int):
+    def add_neuron(self, fromN: int, toN: int, order: float):
         """
         adds new neuron to the digraph
         """
@@ -114,7 +117,6 @@ class Gnn:
         if (order < 0) or (order >= 1):
             raise Exception(f"Order {order} is not in interval <0, 1)")
 
-        self.activation_functions_ids = np.append(self.activation_functions_ids, activation_function)
         self.order = np.append(self.order, order)
         new_neuron_inputs = np.zeros((1, self.digraph.shape[1])) - 1
         self.digraph = np.vstack([self.digraph, new_neuron_inputs])
@@ -156,11 +158,8 @@ class Gnn:
         # sets activation for input neurons
         self.activations[:self.N_inputs] = x
 
-        # get unique order values and sorts them + removes -1
-        order_values = sorted(set(self.order))[1:]
-
         # loops over all order values
-        for order in order_values:
+        for order in self.order_values[1:]:
 
             # loops over all neurons with current order value
             curent_neuron_indicies = np.where(self.order == order)[0]
@@ -177,7 +176,10 @@ class Gnn:
                 z = input_values @ weights + self.biases[neuron_index]
 
                 # passes z throung activation function
-                activation = self.activation_functions[self.activation_functions_ids[neuron_index]](z)
+                if order == 1:
+                    activation = self.output_act_fn(z)
+                else:
+                    activation = self.hidden_act_fn(z)
 
                 # updates values in digraph
                 self.z[neuron_index] = z
@@ -197,25 +199,22 @@ class Gnn:
         self.biases_grad = np.zeros_like(self.biases)
         self.weights_grad = np.zeros_like(self.weights)
 
-        # get unique order values and sorts them backwards + removes -1
-        order_values = sorted(set(self.order), reverse=True)[:-1]
-
         # loops over all order values
-        for order in order_values:
-            
+        for order in self.order_values[:-1]:
+
             # loops over all neurons with current order value
             curent_neuron_indicies = np.where(self.order == order)[0]
             for neuron_index in curent_neuron_indicies:
-                
+
                 # if neuron is output neuron
                 if order == 1:
-                    
+
                     # gets gradient of the loss function
                     output_index = neuron_index-self.N_inputs
                     loss_grad = self.loss_fn.grad(y[output_index], self.activations[neuron_index])
-                    
+
                     # multiplies loss gradient by gradient of activation function
-                    b_grad = self.activation_functions[self.activation_functions_ids[neuron_index]].grad(self.z[neuron_index]) * loss_grad
+                    b_grad = self.output_act_fn.grad(self.z[neuron_index]) * loss_grad
 
                     # stores bias gradient
                     self.biases_grad[neuron_index] = b_grad
@@ -225,7 +224,7 @@ class Gnn:
                         if input_neuron_index == -1:
                             continue
                         input_neuron_index = int(input_neuron_index)
-                        
+
                         # multiplies activation of input neuron and bias gradient to get weight gradient
                         activation = self.activations[input_neuron_index]
                         w_grad = activation * b_grad
@@ -234,7 +233,6 @@ class Gnn:
                         self.weights_grad[neuron_index, input_index] = w_grad
 
                 else:
-
                     delta_sum = 0
 
                     # finds all neurons that use output of current neuron
@@ -250,7 +248,7 @@ class Gnn:
                             delta_sum += delta
 
                     # multiplies the sum of gradients by gradient of the activation function
-                    b_grad = delta_sum * self.activation_functions[self.activation_functions_ids[neuron_index]].grad(self.z[neuron_index])
+                    b_grad = delta_sum * self.hidden_act_fn.grad(self.z[neuron_index])
                     
                     # stores bias gradient
                     self.biases_grad[neuron_index] = b_grad
@@ -268,67 +266,4 @@ class Gnn:
                         # stores weight gradient
                         self.weights_grad[neuron_index, input_index] = w_grad
 
-
         return self.biases_grad, self.weights_grad
-
-if __name__ == "__main__":
-    pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# @property
-# def table(self):
-#     """
-#     string representation of directed graph
-#     """
-
-#     rounded_activations = np.round(self.activations[0], 2)
-#     z = np.round(self.z[0], 2)
-
-#     activation_len = max(len(str(np.max(np.abs(rounded_activations)))), len('activation'))
-#     z_len = max(len(str(np.max(np.abs(z)))), len('z')) + 1
-#     order_len = max(len(str(np.max(np.abs((self.order))))), len('order'))
-#     N_inputs = max((self.digraph.shape[1])*3-2, len('inputs'))
-#     inputsSize = len(str(int(np.max(self.digraph.flatten()))))
-#     table = f" {'activation'.center(activation_len, ' ')} | {'z'.center(z_len, ' ')} | {'order'.center(order_len, ' ')} | {'inputs'.center(N_inputs, ' ')} \n"
-#     table+= f"{'-'*(activation_len+2)}|{'-'*(z_len+2)}|{'-'*(order_len+2)}|{'-'*(N_inputs+2)}\n"
-#     for a, z, order, inputs in zip(rounded_activations, np.round(self.z, 2), self.order, self.digraph):
-#         inputs = list(filter(lambda i: '-1' not in i, [str(int(i)).rjust(inputsSize+1) for i in inputs]))
-#         inputs = " ".join(inputs)
-        
-#         table += f" {str(a).rjust(activation_len, ' ')} | {str(z).rjust(z_len, ' ')} | {str(order).rjust(order_len, ' ')} | {inputs.ljust(N_inputs, ' ')}\n"
-
-#     return table
