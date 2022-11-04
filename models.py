@@ -114,7 +114,7 @@ class UnnamedModel1(Model):
             random_index = np.random.randint(0, len(posible_order_values)-1)
 
             # get the value between the one picked and next one
-            value = (posible_order_values[random_index] + posible_order_values[random_index+1])/2
+            order_value = (posible_order_values[random_index] + posible_order_values[random_index+1])/2
 
         else:
 
@@ -122,25 +122,36 @@ class UnnamedModel1(Model):
             posible_order_values = list(set(self.gnn.order_values + [0]) - {-1, 1})
 
             # chooses one value at random
-            value = np.random.choice(posible_order_values)
+            order_value = np.random.choice(posible_order_values)
 
         # decides if neuron will be of memory type (will be using old activations for new calculations)
         if np.random.random((1)) < memory_chance:
-            pass
+            # get indicies of all neurons with higher or same order value
+            posibble_from_neurons = np.where(self.gnn.order >= order_value)[0]
+
+            # get indicies of all neurons with lower or same order value excluding -1s (input neurons)
+            posibble_to_neurons = np.where((self.gnn.order <= order_value) & (self.gnn.order != -1))[0]
+
+            # chooses 2 neurons that the new one will connect
+            from_neuron = np.random.choice(posibble_from_neurons)
+            to_neuron = np.random.choice(posibble_to_neurons)
+
+            # add the new neuron to gnn
+            self.gnn.add_neuron(from_neuron, to_neuron, order_value)
 
         else:
             # get indicies of all neurons with lower order value
-            posibble_from_neuron = np.where(self.gnn.order < value)[0]
+            posibble_from_neurons = np.where(self.gnn.order < order_value)[0]
 
             # get indicies of all neurons with higher order value
-            posibble_to_neuron = np.where(self.gnn.order > value)[0]
+            posibble_to_neurons = np.where(self.gnn.order > order_value)[0]
 
             # chooses 2 neurons that the new one will connect
-            from_neuron = np.random.choice(posibble_from_neuron)
-            to_neuron = np.random.choice(posibble_to_neuron)
+            from_neuron = np.random.choice(posibble_from_neurons)
+            to_neuron = np.random.choice(posibble_to_neurons)
 
             # add the new neuron to gnn
-            self.gnn.add_neuron(from_neuron, to_neuron, value)
+            self.gnn.add_neuron(from_neuron, to_neuron, order_value)
 
     def _add_connection_randomly(self, memory_chance: float = 0):
         pass
