@@ -126,6 +126,7 @@ class UnnamedModel1(Model):
 
         # decides if neuron will be of memory type (will be using old activations for new calculations)
         if np.random.random((1)) < memory_chance:
+
             # get indicies of all neurons with higher or same order value
             posibble_from_neurons = np.where(self.gnn.order >= order_value)[0]
 
@@ -154,7 +155,9 @@ class UnnamedModel1(Model):
             self.gnn.add_neuron(from_neuron, to_neuron, order_value)
 
     def _add_connection_randomly(self, memory_chance: float = 0):
-        pass
+        # decides if connection will be of memory type (will be using old activations for new calculations)
+        if np.random.random((1)) < memory_chance:
+            pass
 
     def build(self):
         self._set_gnn_parameters()

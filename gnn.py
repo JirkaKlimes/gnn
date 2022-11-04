@@ -55,7 +55,12 @@ class Gnn:
         self.hidden_act_fn = None
         self.output_act_fn = None
 
+        # stores loss function
         self.loss_fn = None
+
+    @property
+    def order_values(self):
+        return sorted(set(self.order))
 
     def _expand_inputs(self, n: int = 1):
         """
@@ -79,10 +84,6 @@ class Gnn:
             return negative_ones[0]
         self._expand_inputs()
         return self.digraph.shape[1] - 1
-
-    @property
-    def order_values(self):
-        return sorted(set(self.order), reverse=True)
 
     def add_connection(self, fromN: int, toN: int):
         """
@@ -199,9 +200,9 @@ class Gnn:
         self.biases_grad = np.zeros_like(self.biases)
         self.weights_grad = np.zeros_like(self.weights)
 
-        # loops over all order values
-        for order in self.order_values[:-1]:
-
+        # loops over order values and sorts them backwards + removes -1
+        for order in self.order_values[::-1][:-1]:
+            
             # loops over all neurons with current order value
             curent_neuron_indicies = np.where(self.order == order)[0]
             for neuron_index in curent_neuron_indicies:
@@ -224,7 +225,7 @@ class Gnn:
                         if input_neuron_index == -1:
                             continue
                         input_neuron_index = int(input_neuron_index)
-
+                        
                         # multiplies activation of input neuron and bias gradient to get weight gradient
                         activation = self.activations[input_neuron_index]
                         w_grad = activation * b_grad
@@ -249,7 +250,7 @@ class Gnn:
 
                     # multiplies the sum of gradients by gradient of the activation function
                     b_grad = delta_sum * self.hidden_act_fn.grad(self.z[neuron_index])
-                    
+
                     # stores bias gradient
                     self.biases_grad[neuron_index] = b_grad
 
