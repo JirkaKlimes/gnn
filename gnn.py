@@ -63,20 +63,18 @@ class Gnn:
         return sorted(set(self.order))
 
     def _expand_inputs(self, n: int = 1):
-        """
-        Adds:
-            - collumn of -1s to digraph
-            - collumn of 0s to weights
-        """
+
+        # dds row of -1s to digraph
         new_inputs = np.zeros((self.digraph.shape[0], n)) - 1
         self.digraph = np.hstack([self.digraph, new_inputs])
         
+        # dds row of 0s to weights
         new_weights = np.zeros((self.weights.shape[0], n))
         self.weights = np.hstack([self.weights, new_weights])
 
     def _new_input_index(self, neuron_idx: int):
         """
-        returns index of first -1 in neuron inputs
+        returns index of first "-1" in neuron inputs
         if there isn't one inputs get expanded
         """
         negative_ones = np.where(self.digraph[neuron_idx] == -1)[0]
@@ -129,15 +127,6 @@ class Gnn:
 
         self.add_connection(fromN, new_neuron_index)
         self.add_connection(new_neuron_index, toN)
-
-    def add_order_value(self, value: float):
-        if (value <= 0) or (value > 1):
-            raise Exception(f"Order for hidden neuron must be in interval (0, 1>, it was {value}.")
-
-        if value in self.order_values:
-            return
-
-        self.order_values = sorted(self.order_values + [value])
 
     def remove_neuron(self, index):
         if index < self.N_inputs:

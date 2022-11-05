@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from gnn import Gnn
 from activations import Activation
 from losses import Loss
+import matplotlib.pyplot as plt
 
 
 class Model(ABC):
@@ -133,6 +134,10 @@ class UnnamedModel1(Model):
             # get indicies of all neurons with lower or same order value excluding -1s (input neurons)
             posibble_to_neurons = np.where((self.gnn.order <= order_value) & (self.gnn.order != -1))[0]
 
+            # returns false if neuron can't be created
+            if posibble_from_neurons.shape[0] == 0 or posibble_from_neurons.shape[0] == 0:
+                return False
+
             # chooses 2 neurons that the new one will connect
             from_neuron = np.random.choice(posibble_from_neurons)
             to_neuron = np.random.choice(posibble_to_neurons)
@@ -154,19 +159,159 @@ class UnnamedModel1(Model):
             # add the new neuron to gnn
             self.gnn.add_neuron(from_neuron, to_neuron, order_value)
 
+        return True
+
+    # this is only prototype method
     def _add_connection_randomly(self, memory_chance: float = 0):
         # decides if connection will be of memory type (will be using old activations for new calculations)
         if np.random.random((1)) < memory_chance:
             pass
 
+        else:
+
+            # neurons that have free input
+            free_inputs = np.unique(np.argwhere(self.gnn.digraph == -1)[:, 0])[self.gnn.N_inputs:]
+
+            # neurons that have higher order value than 0
+            possible_order_values = np.where(self.gnn.order > 0)[0]
+
+            # neurons to which connection can be created
+            possible_to_neurons = np.intersect1d(free_inputs, possible_order_values)
+
+            if not possible_to_neurons.shape[0]:
+                return False
+
+            to_neuron = np.random.choice(possible_to_neurons)
+            to_neuron_order = self.gnn.order[to_neuron]
+
+            possible_from_neurons = np.where(self.gnn.order < to_neuron_order)[0]
+            if not possible_from_neurons.shape[0]:
+                return False
+
+            from_neuron = np.random.choice(possible_from_neurons)
+
+            if from_neuron in self.gnn.digraph[to_neuron]:
+                return False
+
+            self.gnn.add_connection(from_neuron, to_neuron)
+
+        return True
+
     def build(self):
         self._set_gnn_parameters()
         self._fully_connect()
+        self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
         self._isBuilt = True
 
-    def train(self, trainX, trainY, target_loss: float = 0.01):
+
+    def train(self, dataset, batch_size: int = None, target_loss: float = 0.01, validation_frequency: int = 10, learning_rate: float = 0.01):
         """
         Trains the network on dataset
         """
 
+        current_loss = np.Infinity
+        dataset = dataset.copy()
+
+        fig = plt.figure()
+        plt.style.use('seaborn-whitegrid')
+        ax = fig.add_subplot(111)
+
+
+        loss_arr = np.array([])
+        iters_arr = np.array([])
+
+        last_added = 0
+        iterations = 0
+        while current_loss > target_loss:
+            iterations += 1
+
+            random.shuffle(dataset)
+            batch = dataset[:batch_size]
+
+            sum_biases_grad = np.zeros_like(self.gnn.biases)
+            sum_weights_grad = np.zeros_like(self.gnn.weights)
+
+            for x, y in batch:
+                biases_grad, weights_grad = self.gnn.backprop(x, y)
+
+                sum_biases_grad += biases_grad
+                sum_weights_grad += weights_grad
+
+            b_grad = sum_biases_grad / batch_size
+            w_grad = sum_weights_grad / batch_size
+
+            self.gnn.weights -= w_grad * learning_rate
+            self.gnn.biases -= b_grad * learning_rate
+
+            if iterations % validation_frequency == 0:
+
+                if loss_arr.shape[0] > 10:
+                    loss_slope = (loss_arr[-1] - loss_arr[-10])/10
+                    if loss_slope > -0.01:
+                        if last_added + 100 < iterations:
+                            self._add_neuron_randomly(0.2)
+                            self._add_connection_randomly()
+                            self._add_connection_randomly()
+                            self._add_connection_randomly()
+                            last_added = iterations
+
+
+                loss = 0
+                for x, y in dataset:
+                    loss += self.loss_fn(y, self.gnn.push(x))
+
+                loss /= len(dataset)
+
+                current_loss = loss
+
+                print(f"Iteration: {iterations} | Loss: {loss} | Neurons: {self.gnn.order.shape[0]}")
+
+                iters_arr = np.append(iters_arr, iterations)
+                loss_arr = np.append(loss_arr, loss)
+
+                ax.cla()
+
+                # -min(iters_arr.shape[0], 70):
+                ax.plot(iters_arr, loss_arr, '-', color='r')
+
+                plt.draw()
+                plt.pause(0.0000001)
+        
+        print('Target loss reached!')
+        plt.show()
+
+
+
+
+
+
+if __name__ == "__main__":
+    from activations import Relu, Identity, Sigmoid
+    from models import UnnamedModel1
+    from losses import MeanSquaredError
+    from gnn import Gnn
+    import tensorflow as tf
+
+
+    (train_x, _train_y), _ = tf.keras.datasets.mnist.load_data()
+
+    SIZE = 100
+    train_x = tf.keras.utils.normalize(train_x, axis=1)[:SIZE]
+    _train_y = _train_y[:SIZE]
+    train_y = np.zeros((_train_y.size, _train_y.max() + 1))
+    train_y[np.arange(_train_y.size), _train_y] = 1
+
+    dataset = [(x.flatten(), y) for x, y in zip(train_x, train_y)]
+
+
+    gnn = Gnn(784, 10)
+
+
+    model = UnnamedModel1(gnn)
+    model.set_hidden_act_function(Relu())
+    model.set_output_act_function(Identity())
+    model.set_loss_function(MeanSquaredError())
+    model.build()
+
+    model.train(dataset, batch_size = 10, target_loss = 0.05, learning_rate=0.1)
 
