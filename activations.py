@@ -10,28 +10,20 @@ class Activation(ABC):
         return self.fn(z)
 
     @abstractmethod
-    def fn(self, z):
+    def fn(self, z) -> float:
         raise NotImplementedError
 
     @abstractmethod
-    def grad(self, z, **kwargs):
+    def grad(self, z) -> float:
         raise NotImplementedError
 
+    @abstractmethod
+    def cuda_fn(z) -> callable:
+        raise NotImplementedError
 
-class Sigmoid(Activation):
-    def __init__(self):
-        """A logistic sigmoid activation function."""
-        super().__init__()
-
-    def __str__(self):
-        return "Sigmoid"
-
-    def fn(self, z):
-        return 1 / (1 + np.exp(-z))
-
-    def grad(self, z):
-        fn_z = self.fn(z)
-        return fn_z * (1 - fn_z)
+    @abstractmethod
+    def cuda_grad(z) -> callable:
+        raise NotImplementedError
 
 class Relu(Activation):
     def __init__(self):
@@ -42,57 +34,20 @@ class Relu(Activation):
         return "ReLU"
 
     def fn(self, z):
-        return np.clip(z, 0, np.inf)
+        return max(0, z)
 
     def grad(self, z):
-        return (z > 0).astype(int)
+        return 0 if z < 0 else 1
 
-class Kelu(Activation):
-    def __init__(self, alpha=0.01):
-        """A Modified Gelu which allows for gradient in negative values"""
-        self.alpha = alpha
-        super().__init__()
+    def cuda_fn(self):
+        def fn(z):
+            return max(0, z)
+        return fn
 
-    def __str__(self):
-        return f"KeLU (alpha={self.alpha})"
-
-    def fn(self, z):
-        pi, sqrt, tanh = np.pi, np.sqrt, np.tanh
-
-        # return 0.5 * z * (1 + tanh(sqrt(2 / pi) * (z + 0.044715 * z ** 3)))
-
-    def grad(self, z):
-        pi, sqrt, tanh = np.pi, np.sqrt, np.tanh
-
-
-class Tanh(Activation):
-    def __init__(self):
-        """A hyperbolic tangent activation function."""
-        super().__init__()
-
-    def __str__(self):
-        return "Tanh"
-
-    def fn(self, z):
-        return np.tanh(z)
-
-    def grad(self, x):
-        return 1 - np.tanh(x) ** 2
-
-class LeakyReLU(Activation):
-    def __init__(self, alpha=0.1):
-        self.alpha = alpha
-        super().__init__()
-
-    def __str__(self):
-        return f"Leaky ReLU(alpha={self.alpha})"
-
-    def fn(self, z):
-        return z*self.alpha if z < 0 else z
-
-    def grad(self, z):
-        return self.alpha if z < 0 else 1
-
+    def cuda_grad(self):
+        def fn(z):
+            return 0 if z < 0 else 1
+        return fn
 
 class Identity(Activation):
     def __init__(self):
@@ -104,5 +59,17 @@ class Identity(Activation):
     def fn(self, z):
         return z
 
-    def grad(self, x):
-        return np.ones_like(x)
+    def grad(self, z):
+        return 1
+
+    def cuda_fn(z):
+        def fn(z):
+            return z
+        return fn
+    
+    def cuda_grad(z):
+        def fn(z):
+            return 1
+        return fn
+
+
