@@ -10,11 +10,14 @@ class Loss(ABC):
         return self.fn(y_true, y_pred)
 
     @abstractmethod
-    def fn(self, y_true, y_pred):
+    def fn(self, y_true, y_pred) -> float:
         raise NotImplementedError
 
     @abstractmethod
-    def grad(self, y_true, y_pred, **kwargs):
+    def grad(self, y_true, y_pred, **kwargs) -> float:
+        raise NotImplementedError
+
+    def cuda_grad(self) -> callable:
         raise NotImplementedError
 
 
@@ -34,3 +37,8 @@ class MeanSquaredError(Loss):
 
     def grad(self, y_true, y_pred):
         return y_pred - y_true
+
+    def cuda_grad(self):
+        def fn(y_true, y_pred):
+            return y_pred - y_true
+        return fn
