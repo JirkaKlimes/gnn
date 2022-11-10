@@ -467,7 +467,7 @@ class Gnn:
                         weights_grad[neuron_index, input_index] = w_grad
 
                 else:
-                    pass
+                    delta_sum = 0
 
         self._backprop_kernel = kernel
 
@@ -553,6 +553,8 @@ class Gnn:
 if __name__ == "__main__":
     from activations import Relu, Identity
     from losses import MeanSquaredError
+
+    np.random.seed(1)
 
     gnn = Gnn(2, 2)
 
