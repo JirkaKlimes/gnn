@@ -286,7 +286,7 @@ class UnnamedModel1(Model):
 
 
 if __name__ == "__main__":
-    from activations import Relu, Identity, Sigmoid
+    from activations import Relu, Identity
     from models import UnnamedModel1
     from losses import MeanSquaredError
     from gnn import Gnn
