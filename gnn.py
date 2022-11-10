@@ -3,7 +3,6 @@ from numba import cuda
 import numba
 from collections import Counter
 import os
-# os.environ["NUMBA_ENABLE_CUDASIM"] = "1"
 
 np.random.seed(1)
 
@@ -469,6 +468,33 @@ class Gnn:
                 else:
                     delta_sum = 0
 
+                    for next_neuron_index in transposed_digraph[neuron_index]:
+                        next_neuron_index = int(next_neuron_index)
+                        for i, input_index in enumerate(digraph[next_neuron_index]):
+                            if input_index == neuron_index:
+                                weight = weights[next_neuron_index, i]
+
+                                delta = weight * biases_grad[next_neuron_index]
+                                delta_sum += delta
+                                break
+
+                    b_grad = delta_sum * hidden_act_fn_grad(z[neuron_index])
+                    biases_grad[neuron_index] = b_grad
+
+                    # loops through all inputs of current neuron
+                    for input_index in range(digraph.shape[1]):
+
+                        # gets index of current input neuron
+                        input_neuron_index = digraph[neuron_index, input_index]
+                        input_neuron_index = int(input_neuron_index)
+
+                        # multiplies activation of input neuron and bias gradient to get weight gradient
+                        activation = activations[input_neuron_index]
+                        w_grad = activation * b_grad
+
+                        # stores weight gradient
+                        weights_grad[neuron_index, input_index] = w_grad
+
         self._backprop_kernel = kernel
 
     def backprop_GPU(self, x: np.ndarray, y: np.ndarray):
@@ -517,7 +543,10 @@ class Gnn:
         many_bias_grads = many_bias_grads.copy_to_host()
         many_weight_grads = many_weight_grads.copy_to_host()
 
-        return many_bias_grads, many_weight_grads
+        bias_grad = np.mean(many_bias_grads, axis=0)
+        weight_grad = np.mean(many_weight_grads, axis=0)
+
+        return bias_grad, weight_grad
 
     def _transpose_digraph(self):
         """
@@ -565,10 +594,10 @@ if __name__ == "__main__":
     gnn.add_connection(1, 3)
     gnn.add_connection(0, 2)
     gnn.add_connection(1, 2)
-    gnn.add_neuron(0, 3, 0.25)
-    gnn.add_neuron(1, 2, 0.25)
+    gnn.add_neuron(0, 3, 0.75)
+    gnn.add_neuron(1, 2, 0.75)
     gnn.add_neuron(4, 3, 0.5)
-    gnn.add_neuron(5, 3, 0.75)
+    gnn.add_neuron(5, 3, 0.25)
 
 
     gnn.weights += np.random.normal(size=gnn.weights.shape)
@@ -587,11 +616,11 @@ if __name__ == "__main__":
     gpu_b_grad, gpu_w_grad = gnn.backprop_GPU(x, y)
 
     print(b_grad)
-    print(w_grad)
-    print()
+    # print(w_grad)
+    # print()
 
-    print(gpu_b_grad)
-    print(gpu_w_grad)
+    # print(gpu_b_grad)
+    # print(gpu_w_grad)
 
 
 
