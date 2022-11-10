@@ -228,17 +228,10 @@ class UnnamedModel1(Model):
             random.shuffle(dataset)
             batch = dataset[:batch_size]
 
-            sum_biases_grad = np.zeros_like(self.gnn.biases)
-            sum_weights_grad = np.zeros_like(self.gnn.weights)
+            x = np.array([b[0] for b in batch])
+            y = np.array([b[1] for b in batch])
 
-            for x, y in batch:
-                biases_grad, weights_grad = self.gnn.backprop(x, y)
-
-                sum_biases_grad += biases_grad
-                sum_weights_grad += weights_grad
-
-            b_grad = sum_biases_grad / batch_size
-            w_grad = sum_weights_grad / batch_size
+            b_grad, w_grad = self.gnn.backprop_GPU(x, y)
 
             self.gnn.weights -= w_grad * learning_rate
             self.gnn.biases -= b_grad * learning_rate
@@ -255,7 +248,6 @@ class UnnamedModel1(Model):
                             self._add_connection_randomly()
                             last_added = iterations
 
-
                 loss = 0
                 for x, y in dataset:
                     loss += self.loss_fn(y, self.gnn.push(x))
@@ -264,7 +256,7 @@ class UnnamedModel1(Model):
 
                 current_loss = loss
 
-                print(f"Iteration: {iterations} | Loss: {loss} | Neurons: {self.gnn.order.shape[0]}")
+                print(f"Iteration: {iterations} | Loss: {loss} | Neurons: {self.gnn.order.shape[0]-self.gnn.N_inputs}")
 
                 iters_arr = np.append(iters_arr, iterations)
                 loss_arr = np.append(loss_arr, loss)
@@ -272,10 +264,12 @@ class UnnamedModel1(Model):
                 ax.cla()
 
                 # -min(iters_arr.shape[0], 70):
-                ax.plot(iters_arr, loss_arr, '-', color='r')
+                ax.plot(iters_arr, np.log(loss_arr), '-', color='r')
 
                 plt.draw()
                 plt.pause(0.0000001)
+            
+            self.gnn.load_backprop_data_to_GPU()
         
         print('Target loss reached!')
         plt.show()
@@ -295,7 +289,7 @@ if __name__ == "__main__":
 
     (train_x, _train_y), _ = tf.keras.datasets.mnist.load_data()
 
-    SIZE = 100
+    SIZE = 1000
     train_x = tf.keras.utils.normalize(train_x, axis=1)[:SIZE]
     _train_y = _train_y[:SIZE]
     train_y = np.zeros((_train_y.size, _train_y.max() + 1))
@@ -313,5 +307,8 @@ if __name__ == "__main__":
     model.set_loss_function(MeanSquaredError())
     model.build()
 
-    model.train(dataset, batch_size = 10, target_loss = 0.05, learning_rate=0.1)
+    model.gnn.create_backprop_kernel()
+    model.gnn.load_backprop_data_to_GPU()
+
+    model.train(dataset, batch_size = 10, target_loss = 0.02, learning_rate=0.2)
 
