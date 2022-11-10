@@ -250,7 +250,7 @@ class Gnn:
                             weight = self.weights[next_neuron_index, weight_index]
 
                             # multiples weight by the gradient and adds to sum
-                            delta = weight * self.biases_grad[neuron_index]
+                            delta = weight * self.biases_grad[next_neuron_index]
                             delta_sum += delta
 
                     # multiplies the sum of gradients by gradient of the activation function
@@ -264,6 +264,7 @@ class Gnn:
                         if input_neuron_index == -1:
                             continue
                         input_neuron_index = int(input_neuron_index)
+
 
                         # multiplies activation of input neuron and bias gradient to get weight gradient
                         activation = self.activations[input_neuron_index]
@@ -390,12 +391,12 @@ class Gnn:
         loss_fn_grad = cuda.jit(self.loss_fn.cuda_grad(), device=True)
 
         @cuda.jit
-        def kernel(digraph, transposed_digraph, thread_order, weights, biases, order, many_activations, many_z, many_bias_grads, many_weight_grads, many_y, N_inputs):
+        def kernel(digraph, transposed_digraph, thread_order, weights, biases, order, many_activations, many_z, many_biases_grad, many_weights_grad, many_y, N_inputs):
             # gets data of current block
             activations = many_activations[cuda.blockIdx.x]
             z = many_z[cuda.blockIdx.x]
-            bias_grads = many_bias_grads[cuda.blockIdx.x]
-            weight_grads = many_weight_grads[cuda.blockIdx.x]
+            biases_grad = many_biases_grad[cuda.blockIdx.x]
+            weights_grad = many_weights_grad[cuda.blockIdx.x]
             y = many_y[cuda.blockIdx.x]
 
             # loops through neurons with same order value (forward pass)
@@ -444,6 +445,26 @@ class Gnn:
                     # gets gradient of the loss function
                     output_index = neuron_index-N_inputs
                     loss_grad = loss_fn_grad(y[output_index], activations[neuron_index])
+
+                    # multiplies loss gradient by gradient of activation function
+                    b_grad = output_act_fn_grad(z[neuron_index]) * loss_grad
+
+                    # stores bias gradient
+                    biases_grad[neuron_index] = b_grad
+
+                    # loops through all inputs of current neuron
+                    for input_index in range(digraph.shape[1]):
+
+                        # gets index of current input neuron
+                        input_neuron_index = digraph[neuron_index, input_index]
+                        input_neuron_index = int(input_neuron_index)
+
+                        # multiplies activation of input neuron and bias gradient to get weight gradient
+                        activation = activations[input_neuron_index]
+                        w_grad = activation * b_grad
+
+                        # stores weight gradient
+                        weights_grad[neuron_index, input_index] = w_grad
 
                 else:
                     pass
@@ -535,16 +556,18 @@ if __name__ == "__main__":
 
     gnn = Gnn(2, 2)
 
-    gnn.hidden_act_fn = Relu()
+    gnn.hidden_act_fn = Identity()
     gnn.output_act_fn = Identity()
     gnn.loss_fn = MeanSquaredError()
-    # gnn.add_connection(0, 3)
-    # gnn.add_connection(1, 3)
-    # gnn.add_connection(0, 2)
-    # gnn.add_connection(1, 2)
+    gnn.add_connection(0, 3)
+    gnn.add_connection(1, 3)
+    gnn.add_connection(0, 2)
+    gnn.add_connection(1, 2)
     gnn.add_neuron(0, 3, 0.25)
     gnn.add_neuron(1, 2, 0.25)
-    # gnn.add_neuron(4, 3, 0.5)
+    gnn.add_neuron(4, 3, 0.5)
+    gnn.add_neuron(5, 3, 0.75)
+
 
     gnn.weights += np.random.normal(size=gnn.weights.shape)
 
@@ -558,6 +581,7 @@ if __name__ == "__main__":
     np.set_printoptions(3)
 
     b_grad, w_grad = gnn.backprop(x[0], y[0])
+
     gpu_b_grad, gpu_w_grad = gnn.backprop_GPU(x, y)
 
     print(b_grad)
