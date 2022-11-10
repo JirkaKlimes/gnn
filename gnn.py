@@ -234,7 +234,7 @@ class Gnn:
                             weight = self.weights[next_neuron_index, weight_index]
 
                             # multiples weight by the gradient and adds to sum
-                            delta = weight * self.biases_grad[neuron_index]
+                            delta = weight * self.biases_grad[next_neuron_index]
                             delta_sum += delta
 
                     # multiplies the sum of gradients by gradient of the activation function
