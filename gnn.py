@@ -146,7 +146,6 @@ class Gnn:
 
         raise NotImplementedError
 
-    # memory not working for now, need to change this
     def push(self, x):
         """
         Propagates single inputs through the network
@@ -504,7 +503,8 @@ class Gnn:
         # initializes activations and z to 0
         if self.many_activations is None:
             self.many_activations = np.zeros((batch_size, self.order.shape[0]))
-            self.gpu_data["many_z"] = cuda.to_device(np.zeros((batch_size, self.order.shape[0])))
+
+        self.gpu_data["many_z"] = cuda.to_device(np.zeros((batch_size, self.order.shape[0])))
 
         # moves outputs to gpu
         gpu_many_y = cuda.to_device(y)
@@ -545,7 +545,8 @@ class Gnn:
 
         return bias_grad, weight_grad
 
-    def _transpose_digraph(self):
+    @property
+    def _transposed_digraph(self):
         """
         Returns transpose of "self.digraph"
         """
@@ -573,4 +574,78 @@ class Gnn:
         self.load_push_data_to_GPU()
 
         # loads transposed digraph to GPU
-        self.gpu_data["transposed_digraph"] = cuda.to_device(self._transpose_digraph())
+        self.gpu_data["transposed_digraph"] = cuda.to_device(self._transposed_digraph)
+
+
+if __name__ == "__main__":
+
+    from activations import Relu, Identity
+    from losses import MeanSquaredError
+
+    # create gnn with 4 inputs and 2 outputs
+    gnn = Gnn(4, 2)
+
+    # sets activations functions
+    gnn.hidden_act_fn = Relu()
+    gnn.output_act_fn = Identity()
+
+    # sets loss function to be used to calculate gradient
+    gnn.loss_fn = MeanSquaredError()
+
+    # adds few connections
+    gnn.add_connection(0, 4)
+    gnn.add_connection(1, 4)
+    gnn.add_connection(2, 5)
+    gnn.add_connection(3, 5)
+
+    # adds new neuron that will be calculated before output
+    gnn.add_neuron(0, 4, 0.5)
+
+    # adds more connections to new neuron
+    gnn.add_connection(3, 6)
+    gnn.add_connection(6, 5)
+
+    # randomize weights and biases of neurons
+    gnn.weights[4, :] = np.random.normal(size=(1, 3))
+    gnn.weights[5, :] = np.random.normal(size=(1, 3))
+    gnn.weights[6, :2] = np.random.normal(size=(1, 2))
+
+    gnn.biases[-3:] = np.random.normal(size=(1, 3))
+
+    # pushes some data through the network
+    x = np.array([0, 1, 2, 3])
+    y = gnn.push(x)
+
+    # finds gradient for single "xy" set
+    x = np.array([0, 1, 2, 3])
+    y = np.array([4, 5])
+    bias_gradients, weight_gradients = gnn.backprop(x, y)
+
+    # updates weights and biases using gradients
+    gnn.biases -= bias_gradients * 0.05
+    gnn.weights -= weight_gradients * 0.05
+
+    # creates gpu push kernel
+    gnn.create_push_kernel()
+    
+    # pushes data throught network using GPU
+    gnn.load_push_data_to_GPU()
+
+    x = np.array([[0, 1, 2, 3],
+                  [4, 5, 6, 7]])
+
+    y = gnn.push_GPU(x)
+
+    # creates gpu backprop kernel
+    gnn.create_backprop_kernel()
+
+    # finds gradient for single batch of "xy" sets
+    gnn.load_backprop_data_to_GPU()
+
+    x = np.array([[0, 1, 2, 3],
+                  [4, 5, 6, 7]])
+    
+    y = np.array([[8, 9],
+                  [10, 11]])
+
+    bias_gradients, weight_gradients = gnn.backprop_GPU(x, y)
