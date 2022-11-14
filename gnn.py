@@ -4,6 +4,8 @@ import numba
 from collections import Counter
 import os
 
+os.environ["NUMBA_ENABLE_CUDASIM"] = "1"
+
 np.random.seed(1)
 
 class Gnn:
@@ -33,7 +35,7 @@ class Gnn:
         self.z = np.zeros((self.N_inputs+self.N_outputs, 1))
 
         # z passed through activation function (initialized as 0s)
-        self.activations = np.zeros((self.N_inputs+self.N_outputs, 1))
+        self.activations = None
         self.many_activations = None
 
         # indicates order of network computation
@@ -157,7 +159,8 @@ class Gnn:
         """
 
         # store neurons activations and z
-        self.activations = np.zeros((self.order.shape[0]))
+        if self.activations is None:
+            self.activations = np.zeros((self.order.shape[0]))
         self.z = np.zeros((self.order.shape[0]))
 
         # sets activation for input neurons
@@ -443,7 +446,7 @@ class Gnn:
 
                     # gets gradient of the loss function
                     output_index = neuron_index-N_inputs
-                    loss_grad = loss_fn_grad(y[output_index], activations[neuron_index])
+                    loss_grad = loss_fn_grad(y[output_index], activations[neuron_index]) # this was crashing before
 
                     # multiplies loss gradient by gradient of activation function
                     b_grad = output_act_fn_grad(z[neuron_index]) * loss_grad
@@ -577,54 +580,3 @@ class Gnn:
 
         # loads transposed digraph to GPU
         self.gpu_data["transposed_digraph"] = cuda.to_device(self._transpose_digraph())
-
-
-if __name__ == "__main__":
-    from activations import Relu, Identity
-    from losses import MeanSquaredError
-
-    np.random.seed(1)
-
-    gnn = Gnn(2, 2)
-
-    gnn.hidden_act_fn = Identity()
-    gnn.output_act_fn = Identity()
-    gnn.loss_fn = MeanSquaredError()
-    gnn.add_connection(0, 3)
-    gnn.add_connection(1, 3)
-    gnn.add_connection(0, 2)
-    gnn.add_connection(1, 2)
-    gnn.add_neuron(0, 3, 0.75)
-    gnn.add_neuron(1, 2, 0.75)
-    gnn.add_neuron(4, 3, 0.5)
-    gnn.add_neuron(5, 3, 0.25)
-
-
-    gnn.weights += np.random.normal(size=gnn.weights.shape)
-
-    gnn.create_backprop_kernel()
-
-    gnn.load_backprop_data_to_GPU()
-
-    x = np.array([[1, 2]])
-    y = np.array([[3, 4]])
-
-    np.set_printoptions(3)
-
-    b_grad, w_grad = gnn.backprop(x[0], y[0])
-
-    gpu_b_grad, gpu_w_grad = gnn.backprop_GPU(x, y)
-
-    print(b_grad)
-    # print(w_grad)
-    # print()
-
-    # print(gpu_b_grad)
-    # print(gpu_w_grad)
-
-
-
-
-
-
-
