@@ -355,23 +355,6 @@ class Gnn:
         y = self.many_activations[:, -self.N_outputs:]
         return y
 
-    def load_push_data_to_GPU(self):
-        # maximum number of neurons with same order value
-        max_count = Counter(self.order).most_common(1)[0][1]
-
-        # each row contains all neurons with same order (can be computed at the same time)
-        thread_order = np.zeros((len(self.order_values), max_count)) - 1
-        for i, value in enumerate(self.order_values):
-            indicies = np.where(self.order == value)[0]
-            thread_order[i, :indicies.shape[0]] = indicies
-
-        # copies the data to GPU memory
-        self.gpu_data['digraph'] = cuda.to_device(self.digraph)
-        self.gpu_data['thread_order'] = cuda.to_device(thread_order)
-        self.gpu_data['weights'] = cuda.to_device(self.weights)
-        self.gpu_data['biases'] = cuda.to_device(self.biases)
-        self.gpu_data['order'] = cuda.to_device(self.order)
-
     def create_backprop_kernel(self):
         """
         Creates CUDA kernel for computing multiple gradients in parallel
@@ -503,7 +486,6 @@ class Gnn:
         # initializes activations and z to 0
         if self.many_activations is None:
             self.many_activations = np.zeros((batch_size, self.order.shape[0]))
-
         self.gpu_data["many_z"] = cuda.to_device(np.zeros((batch_size, self.order.shape[0])))
 
         # moves outputs to gpu
@@ -569,12 +551,29 @@ class Gnn:
         
         return digraph
 
-    def load_backprop_data_to_GPU(self):
-        # loads push data to GPU
-        self.load_push_data_to_GPU()
+    def load_GPU_data(self, weights_only: bool = False):
+        self.gpu_data['weights'] = cuda.to_device(self.weights)
+        self.gpu_data['biases'] = cuda.to_device(self.biases)
 
-        # loads transposed digraph to GPU
-        self.gpu_data["transposed_digraph"] = cuda.to_device(self._transposed_digraph)
+        if not weights_only:
+            # maximum number of neurons with same order value
+            max_count = Counter(self.order).most_common(1)[0][1]
+
+            # each row contains all neurons with same order (can be computed at the same time)
+            thread_order = np.zeros((len(self.order_values), max_count)) - 1
+            for i, value in enumerate(self.order_values):
+                indicies = np.where(self.order == value)[0]
+                thread_order[i, :indicies.shape[0]] = indicies
+
+            # copies the data to GPU memory
+            self.gpu_data['digraph'] = cuda.to_device(self.digraph)
+            self.gpu_data['thread_order'] = cuda.to_device(thread_order)
+            
+            self.gpu_data['order'] = cuda.to_device(self.order)
+            # loads transposed digraph to GPU
+            self.gpu_data["transposed_digraph"] = cuda.to_device(self._transposed_digraph)
+
+
 
 
 if __name__ == "__main__":
@@ -629,7 +628,7 @@ if __name__ == "__main__":
     gnn.create_push_kernel()
     
     # pushes data throught network using GPU
-    gnn.load_push_data_to_GPU()
+    gnn.load_GPU_data()
 
     x = np.array([[0, 1, 2, 3],
                   [4, 5, 6, 7]])
@@ -640,7 +639,7 @@ if __name__ == "__main__":
     gnn.create_backprop_kernel()
 
     # finds gradient for single batch of "xy" sets
-    gnn.load_backprop_data_to_GPU()
+    gnn.load_GPU_data()
 
     x = np.array([[0, 1, 2, 3],
                   [4, 5, 6, 7]])
