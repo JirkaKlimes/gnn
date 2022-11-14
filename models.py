@@ -1,12 +1,7 @@
 import numpy as np
-import random
-
 from abc import ABC, abstractmethod
-from gnn import Gnn
-from activations import Activation
-from losses import Loss
-import matplotlib.pyplot as plt
 
+from gnn import Gnn
 
 class Model(ABC):
     def __init__(self, **kwargs):

@@ -1,12 +1,6 @@
 import numpy as np
 from numba import cuda
-import numba
 from collections import Counter
-import os
-
-os.environ["NUMBA_ENABLE_CUDASIM"] = "1"
-
-np.random.seed(1)
 
 class Gnn:
     def __init__(self, N_inputs: int, N_outputs: int):
