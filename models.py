@@ -1,5 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from activations import Activation
+from losses import Loss
 
 from gnn import Gnn
 
