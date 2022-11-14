@@ -10,5 +10,5 @@
 
 ## To-Do
 * Implement Adam optimizer
-* Automaticly add new neurons and connections
-* Automaticly remove dead neurons
+* Automatically add new neurons and connections
+* Automatically remove dead neurons
