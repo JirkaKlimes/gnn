@@ -7,8 +7,8 @@ class TrainingCallback(ABC):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
-    def __call__(self):
-        self.create()
+    def __call__(self, data):
+        self.update(data)
 
     @abstractmethod
     def create(self):
