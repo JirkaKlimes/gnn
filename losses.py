@@ -20,7 +20,6 @@ class Loss(ABC):
     def cuda_grad(self) -> callable:
         raise NotImplementedError
 
-
 class MeanSquaredError(Loss):
     def __init__(self):
         """A Mean-Squared-Error function"""
