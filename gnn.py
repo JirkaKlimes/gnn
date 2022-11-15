@@ -69,6 +69,10 @@ class Gnn:
                         }
 
     @property
+    def number_of_neurons(self):
+        return self.order.shape[0] - self.N_inputs
+
+    @property
     def order_values(self):
         return sorted(set(self.order))[1:]
 
