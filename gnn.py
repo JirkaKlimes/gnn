@@ -273,7 +273,7 @@ class Gnn:
                         self.weights_grad[neuron_index, input_index] = w_grad
 
         return self.biases_grad, self.weights_grad
- 
+
     def create_push_kernel(self):
         """
         Creates GPU kernel for computing multiple inputs in parallel
