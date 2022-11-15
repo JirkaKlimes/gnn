@@ -14,7 +14,7 @@ class Loss(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def grad(self, y_true, y_pred, **kwargs) -> float:
+    def grad(self, y_true, y_pred) -> float:
         raise NotImplementedError
 
     def cuda_grad(self) -> callable:
