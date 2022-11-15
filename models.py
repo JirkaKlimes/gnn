@@ -200,13 +200,26 @@ class UnnamedModel1(Model):
         self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
         self._isBuilt = True
 
+    def get_batch(self, size):
+        train_x, train_y = self.dataset
+        dataset_lenght = train_x.shape[0]
+        size = size if size <= dataset_lenght else dataset_lenght
 
-    def train(self, train_x, train_y, batch_size: int = None, target_loss: float = 0.01, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
+        data_indicies = np.arange(dataset_lenght)
+        picked_indicies = np.random.choice(data_indicies, size, replace=False)
+
+        batch_x = train_x[picked_indicies]
+        batch_y = train_y[picked_indicies]
+
+
+    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
         """
         Trains the network on dataset
         """
 
-        [callback() for callback in callbacks]
+        self.dataset = dataset
+
+        [callback.create() for callback in callbacks]
 
         training_data = {
             "gnn": self.gnn,
@@ -217,9 +230,12 @@ class UnnamedModel1(Model):
             "new_neurons_loss": []
         }
 
+        current_loss = np.Infinity
         current_iter = 0
-        while True:
+        while current_iter < epochs or current_loss < target_loss:
             current_iter += 1
+
+            batch = self.get_batch(batch_size)
 
             loss = np.random.randint(current_iter, size=(1))[0]
 
@@ -234,7 +250,7 @@ class UnnamedModel1(Model):
                 training_data["loss"].append(loss)
                 training_data["number_of_neurons"] = self.gnn.number_of_neurons
 
-                [callback.update(training_data) for callback in callbacks]
+                [callback(training_data) for callback in callbacks]
 
 
 
@@ -252,7 +268,9 @@ if __name__ == "__main__":
 
     model.build()
 
-    train_x = np.linspace(0, np.pi, 200)
+    train_x = np.linspace(0, np.pi, 5)
     train_y = np.sin(train_x)
 
-    model.train(train_x, train_y, 50, callbacks=[PlotCallback()])
+    dataset = (train_x.reshape(-1, 1, 1), train_y.reshape(-1, 1, 1))
+
+    model.train(dataset, 5, callbacks=[PlotCallback()], epochs=10)
