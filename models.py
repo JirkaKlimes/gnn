@@ -201,7 +201,58 @@ class UnnamedModel1(Model):
         self._isBuilt = True
 
 
-    def train(self, dataset, batch_size: int = None, target_loss: float = 0.01, validation_frequency: int = 10, learning_rate: float = 0.01):
+    def train(self, train_x, train_y, batch_size: int = None, target_loss: float = 0.01, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
         """
         Trains the network on dataset
         """
+
+        [callback() for callback in callbacks]
+
+        training_data = {
+            "gnn": self.gnn,
+            "val_iters": [],
+            "loss": [],
+            "number_of_neurons": self.gnn.number_of_neurons,
+            "new_neurons_iters": [],
+            "new_neurons_loss": []
+        }
+
+        current_iter = 0
+        while True:
+            current_iter += 1
+
+            loss = np.random.randint(current_iter, size=(1))[0]
+
+            if current_iter % validation_frequency == 0:
+
+
+                if np.random.random((1)) < 0.2:
+                    training_data["new_neurons_iters"].append(current_iter)
+                    training_data["new_neurons_loss"].append(loss)
+
+                training_data["val_iters"].append(current_iter)
+                training_data["loss"].append(loss)
+                training_data["number_of_neurons"] = self.gnn.number_of_neurons
+
+                [callback.update(training_data) for callback in callbacks]
+
+
+
+if __name__ == "__main__":
+    from activations import Relu, Identity
+    from losses import MeanSquaredError
+    from callbacks import PlotCallback
+
+    gnn = Gnn(1, 1)
+
+    model = UnnamedModel1(gnn)
+    model.set_hidden_act_function(Relu())
+    model.set_output_act_function(Identity())
+    model.set_loss_function(MeanSquaredError())
+
+    model.build()
+
+    train_x = np.linspace(0, np.pi, 200)
+    train_y = np.sin(train_x)
+
+    model.train(train_x, train_y, 50, callbacks=[PlotCallback()])
