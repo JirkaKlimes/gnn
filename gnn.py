@@ -480,7 +480,7 @@ class Gnn:
 
         self._backprop_kernel = kernel
 
-    def backprop_GPU(self, x: np.ndarray, y: np.ndarray):
+    def backprop_GPU(self, x: np.ndarray, y: np.ndarray, mean: bool = False):
         """
         Find gradient of weights and biases for multiple inputs in parallel
         """
@@ -525,6 +525,9 @@ class Gnn:
         # copies gradients back to host
         many_bias_grads = many_bias_grads.copy_to_host()
         many_weight_grads = many_weight_grads.copy_to_host()
+
+        if not mean:
+            return many_bias_grads, many_weight_grads
 
         bias_grad = np.mean(many_bias_grads, axis=0)
         weight_grad = np.mean(many_weight_grads, axis=0)
