@@ -1,8 +1,8 @@
 import numpy as np
 from abc import ABC, abstractmethod
+
 from activations import Activation
 from losses import Loss
-
 from gnn import Gnn
 
 class Model(ABC):
@@ -198,26 +198,97 @@ class UnnamedModel1(Model):
         self._set_gnn_parameters()
         self._fully_connect()
         self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
+        self.gnn.create_backprop_kernel()
+        self.gnn.create_push_kernel()
         self._isBuilt = True
 
-    def get_batch(self, size):
-        train_x, train_y = self.dataset
-        dataset_lenght = train_x.shape[0]
-        size = size if size <= dataset_lenght else dataset_lenght
+    def _prepare_dataset(self, dataset):
+        train_x, train_y = dataset
 
-        data_indicies = np.arange(dataset_lenght)
-        picked_indicies = np.random.choice(data_indicies, size, replace=False)
+        # gets lengths of all sequences and maximum sequence length
+        self.sequence_lengths = np.array(list(map(len, train_x)))
+        max_seq_len = self.sequence_lengths.max()
 
-        batch_x = train_x[picked_indicies]
-        batch_y = train_y[picked_indicies]
+        # fills short sequences with zeros
+        symetric_train_x = []
+        symetric_train_y = []
+        for seq_len, x_seq, y_seq in zip(self.sequence_lengths, train_x, train_y):
+            sym_x_seq = np.zeros((max_seq_len, self.gnn.N_inputs))
+            sym_y_seq = np.zeros((max_seq_len, self.gnn.N_outputs))
+            sym_x_seq[:seq_len, :] = x_seq
+            sym_y_seq[:seq_len, :] = y_seq
+            symetric_train_x.append(sym_x_seq)
+            symetric_train_y.append(sym_y_seq)
 
+        self.train_x = np.array(symetric_train_x)
+        self.train_y = np.array(symetric_train_y)
+
+        self.dataset_length = self.train_x.shape[0]
+
+    def _get_batch(self, size):
+        # randomly picks "size" indicies
+        b_size = size if size <= self.dataset_length else self.dataset_length
+        data_indicies = np.arange(self.dataset_length)
+        picked_indicies = np.random.choice(data_indicies, b_size, replace=False)
+
+        # returns x, y and sequence lenghts on those indicies
+        x = self.train_x[picked_indicies]
+        y = self.train_y[picked_indicies]
+        seq_lengths = self.sequence_lengths[picked_indicies]
+        return x, y, seq_lengths
+
+    def _get_seq_grads(self):
+        x_batch, y_batch, seq_lenghts = self._get_batch(self._batch_size)
+        max_seq_len = seq_lenghts.max()
+
+        # arrays to store gradients
+        b_grads = np.zeros_like(self.gnn.biases)
+        w_grads = np.zeros_like(self.gnn.weights)
+
+        # loops through the sequence data
+        for i in range(max_seq_len):
+
+            # creates new array from non-contiguous slices
+            x = np.array(x_batch[:, i])
+            y = np.array(y_batch[:, i])
+
+            b_grad, w_grad = self.gnn.backprop_GPU(x, y)
+
+            # array where finnished sequences have 0 and non finished 1
+            finnished_seqs = (seq_lenghts >= i).astype(int)
+
+            # masks gradients of finnished sequences and calculates mean
+            b_grad, w_grad = b_grad * finnished_seqs[:, np.newaxis], w_grad * finnished_seqs[:, np.newaxis, np.newaxis]
+            b_grad = np.ma.masked_equal(b_grad, 0).mean(axis=0)
+            w_grad = np.ma.masked_equal(w_grad, 0).mean(axis=0)
+
+            b_grads += b_grad
+            w_grads += w_grad
+
+        # get mean gradients over entire sequences
+        b_grads /= max_seq_len
+        w_grads /= max_seq_len
+
+        return b_grads, w_grads
+
+    # prototype (gradient momentum not implemented)
+    def _update_batch(self):
+        # gets gradients and updates weights and biases
+        b_grads, w_grads = self._get_seq_grads()
+
+        self.gnn.biases -= b_grads * self._learning_rate
+        self.gnn.weights -= w_grads * self._learning_rate
 
     def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
         """
         Trains the network on dataset
         """
 
-        self.dataset = dataset
+        self._learning_rate = learning_rate
+        self._batch_size = batch_size
+
+        self._prepare_dataset(dataset)
+        self.gnn.load_GPU_data()
 
         [callback.create() for callback in callbacks]
 
@@ -235,7 +306,7 @@ class UnnamedModel1(Model):
         while current_iter < epochs or current_loss < target_loss:
             current_iter += 1
 
-            batch = self.get_batch(batch_size)
+            self._update_batch()
 
             loss = np.random.randint(current_iter, size=(1))[0]
 
@@ -253,11 +324,13 @@ class UnnamedModel1(Model):
                 [callback(training_data) for callback in callbacks]
 
 
-
 if __name__ == "__main__":
     from activations import Relu, Identity
     from losses import MeanSquaredError
     from callbacks import PlotCallback
+
+    from sequence_datasets import addToSum
+    from pprint import pprint
 
     gnn = Gnn(1, 1)
 
@@ -268,9 +341,12 @@ if __name__ == "__main__":
 
     model.build()
 
-    train_x = np.linspace(0, np.pi, 5)
-    train_y = np.sin(train_x)
+    # train_x = np.linspace(0, np.pi, 5).reshape(-1, 1)
+    # train_y = np.sin(train_x)
 
-    dataset = (train_x.reshape(-1, 1, 1), train_y.reshape(-1, 1, 1))
+    # dataset = (train_x, train_y)
 
-    model.train(dataset, 5, callbacks=[PlotCallback()], epochs=10)
+    dataset = addToSum()
+    # pprint(dataset)
+
+    model.train(dataset, 2, callbacks=[], epochs=10)
