@@ -279,7 +279,7 @@ class UnnamedModel1(Model):
 
     def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity,
                     lr: float = 0.01, vf: int = 10, ls: float = -0.005, lbs: float = 5, gr: float = 0.01,
-                    gd: int = 10, mp: float = 0.05, nop: float = 0.2, callbacks: list = []):
+                    gd: int = 10, mp: float = 0.05, nop: float = 0.05, callbacks: list = []):
         """
         Trains the network on dataset
         
@@ -306,7 +306,7 @@ class UnnamedModel1(Model):
         gd:
             how many validations to wait before new neurons can grow
         mp:
-            probability that new neuron / connection will be memory
+            probability that new neuron / connection will have memory
         nop:
             probability that new neuron will create new order value
         callbacks:
@@ -319,7 +319,7 @@ class UnnamedModel1(Model):
         self._prepare_dataset(dataset)
         self.gnn.create_backprop_kernel()
         self.gnn.create_push_kernel()
-        self.gnn.load_GPU_data()
+        self.gnn.load_GPU_data(batch_size)
 
         [callback.create() for callback in callbacks]
 
@@ -335,13 +335,13 @@ class UnnamedModel1(Model):
         current_loss = np.Infinity
         current_epoch = 0
         last_grow = 0
-        while current_epoch < epochs or current_loss < target_loss:
+        while current_epoch < epochs and current_loss > target_loss:
             netwok_grew = False
             current_epoch += 1
 
             self._update_batch()
 
-            loss = self._validate()
+            current_loss = self._validate()
 
             if current_epoch % vf == 0:
 
@@ -351,19 +351,19 @@ class UnnamedModel1(Model):
                     current_validation = current_epoch / vf
                     if slope > ls and current_validation > last_grow + gd:
                         training_data["new_neurons_epochs"].append(current_epoch)
-                        training_data["new_neurons_loss"].append(loss)
+                        training_data["new_neurons_loss"].append(current_loss)
 
                         last_grow = current_validation
                         self._grow_network(gr, mp, nop)
                         netwok_grew = True
 
                 training_data["epochs"].append(current_epoch)
-                training_data["loss"].append(loss)
+                training_data["loss"].append(current_loss)
                 training_data["number_of_neurons"] = self.gnn.number_of_neurons
 
                 [callback(training_data) for callback in callbacks]
 
-            self.gnn.load_GPU_data(not netwok_grew)
+            self.gnn.load_GPU_data(batch_size, not netwok_grew)
 
 
 if __name__ == "__main__":
@@ -372,31 +372,36 @@ if __name__ == "__main__":
     from callbacks import PlotCallback, StdOutCallback
 
     from sequence_datasets import addToSum, test1
-    from pprint import pprint
 
-    np.random.seed(1)
-
-    gnn = Gnn(1, 1)
+    gnn = Gnn(784, 10)
 
     model = UnnamedModel1(gnn)
     model.set_hidden_act_function(Relu())
     model.set_output_act_function(Identity())
     model.set_loss_function(MeanSquaredError())
-    # model.allow_memory()
 
     model.build()
 
-    for _ in range(100):
-        model._add_neuron_randomly(0.5, 0.2)
-    for _ in range(200):
-        model._add_connection_randomly(0.2)
+    import tensorflow as tf
 
-    gnn.weights += np.random.normal(size=gnn.weights.shape)
+    (x_train, _y_train), (x_test, _y_test) = tf.keras.datasets.mnist.load_data()
 
-    train_x = np.linspace(0, np.pi, 250).reshape(-1, 1)
-    train_y = np.sin(train_x)
+    SIZE = 1000
 
-    dataset = (train_x, train_y)
-    dataset = model.convert_dataset(dataset)
+    x_train = tf.keras.utils.normalize(x_train, axis=1)[:SIZE]
+    x_test = tf.keras.utils.normalize(x_test, axis=1)[:SIZE]
+    _y_train = _y_train[:SIZE]
+    _y_test = _y_test[:SIZE]
 
-    model.train(dataset, 50, epochs=10000, lr = 0.01, ls = -0.005, gr = 0.01, gd = 10, callbacks=[PlotCallback(), StdOutCallback()])
+    y_train = np.zeros((_y_train.size, _y_train.max() + 1))
+    y_train[np.arange(_y_train.size), _y_train] = 1
+
+    y_test = np.zeros((_y_test.size, _y_test.max() + 1))
+    y_test[np.arange(_y_test.size), _y_test] = 1
+
+    dataset = model.convert_dataset((x_train.reshape(SIZE, -1), y_train))
+
+    model.train(dataset, 100, target_loss = 0.05,
+                lr = 0.2, ls = -0.005, gr = 0.01, gd = 10,
+                nop = 0.05,
+                callbacks=[PlotCallback(), StdOutCallback()])
