@@ -25,7 +25,7 @@ class PlotCallback(TrainingCallback):
         self.ax = self.fig.add_subplot(111)
 
     def plot_loss(self):
-        x = np.array(self.data["val_iters"])
+        x = np.array(self.data["iters"])
         y = np.array(self.data["loss"])
         y = np.log(y+1)
 
