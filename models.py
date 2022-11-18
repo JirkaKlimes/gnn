@@ -237,47 +237,19 @@ class UnnamedModel1(Model):
         seq_lengths = self.sequence_lengths[picked_indicies]
         return x, y, seq_lengths
 
-    def _get_seq_grads(self):
-        x_batch, y_batch, seq_lenghts = self._get_batch(self._batch_size)
-        max_seq_len = seq_lenghts.max()
-
-        # arrays to store gradients
-        b_grads = np.zeros_like(self.gnn.biases)
-        w_grads = np.zeros_like(self.gnn.weights)
-
-        # loops through the sequence data
-        for i in range(max_seq_len):
-
-            # creates new array from non-contiguous slices
-            x = np.array(x_batch[:, i])
-            y = np.array(y_batch[:, i])
-
-            b_grad, w_grad = self.gnn.backprop_GPU(x, y)
-
-            # array where finnished sequences have 0 and non finished 1
-            finnished_seqs = (seq_lenghts >= i).astype(int)
-
-            # masks gradients of finnished sequences and calculates mean
-            b_grad, w_grad = b_grad * finnished_seqs[:, np.newaxis], w_grad * finnished_seqs[:, np.newaxis, np.newaxis]
-            b_grad = np.ma.masked_equal(b_grad, 0).mean(axis=0)
-            w_grad = np.ma.masked_equal(w_grad, 0).mean(axis=0)
-
-            b_grads += b_grad
-            w_grads += w_grad
-
-        # get mean gradients over entire sequences
-        b_grads /= max_seq_len
-        w_grads /= max_seq_len
-
-        return b_grads, w_grads
-
     # prototype (gradient momentum not implemented)
     def _update_batch(self):
         # gets gradients and updates weights and biases
-        b_grads, w_grads = self._get_seq_grads()
+        x_batch, y_batch, seq_lenghts = self._get_batch(self._batch_size)
 
-        self.gnn.biases -= b_grads * self._learning_rate
-        self.gnn.weights -= w_grads * self._learning_rate
+        b_grad, w_grad = self.gnn.backprop_GPU(x_batch, y_batch, seq_lenghts)
+
+        self.gnn.biases -= b_grad * self._learning_rate
+        self.gnn.weights -= w_grad * self._learning_rate
+
+    def _validate(self):
+        pred_y = self.gnn.push_GPU(self.train_x, self.sequence_lengths)
+        return self.loss_fn(self.train_y, pred_y)
 
     def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
         """
@@ -288,6 +260,8 @@ class UnnamedModel1(Model):
         self._batch_size = batch_size
 
         self._prepare_dataset(dataset)
+        self.gnn.create_backprop_kernel()
+        self.gnn.create_push_kernel()
         self.gnn.load_GPU_data()
 
         [callback.create() for callback in callbacks]
@@ -308,20 +282,22 @@ class UnnamedModel1(Model):
 
             self._update_batch()
 
-            loss = np.random.randint(current_iter, size=(1))[0]
+            loss = self._validate()
+            print(loss)
 
             if current_iter % validation_frequency == 0:
 
-
-                if np.random.random((1)) < 0.2:
-                    training_data["new_neurons_iters"].append(current_iter)
-                    training_data["new_neurons_loss"].append(loss)
+                # if np.random.random((1)) < 0.2:
+                #     training_data["new_neurons_iters"].append(current_iter)
+                #     training_data["new_neurons_loss"].append(loss)
 
                 training_data["val_iters"].append(current_iter)
                 training_data["loss"].append(loss)
                 training_data["number_of_neurons"] = self.gnn.number_of_neurons
 
                 [callback(training_data) for callback in callbacks]
+            
+            self.gnn.load_GPU_data(True)
 
 
 if __name__ == "__main__":
@@ -329,7 +305,7 @@ if __name__ == "__main__":
     from losses import MeanSquaredError
     from callbacks import PlotCallback
 
-    from sequence_datasets import addToSum
+    from sequence_datasets import addToSum, test1
     from pprint import pprint
 
     gnn = Gnn(1, 1)
@@ -341,12 +317,37 @@ if __name__ == "__main__":
 
     model.build()
 
+    # gnn.add_neuron(0, 1, 0.75)
+    # gnn.add_neuron(2, 1, 0.5)
+
+    gnn.add_neuron(0, 1, 0.9)
+    gnn.add_neuron(2, 1, 0.1)
+    gnn.add_neuron(0, 1, 0.2)
+
+    gnn.add_connection(0, 3)
+    gnn.add_connection(4, 3)
+
+    gnn.add_neuron(3, 1, 0.5)
+
+    gnn.add_connection(5, 4)
+    gnn.add_connection(3, 2)
+    gnn.add_connection(0, 5)
+
+    gnn.weights += np.random.normal(size=gnn.weights.shape)
+
+
     # train_x = np.linspace(0, np.pi, 5).reshape(-1, 1)
     # train_y = np.sin(train_x)
 
     # dataset = (train_x, train_y)
 
-    dataset = addToSum()
-    # pprint(dataset)
+    # dataset = addToSum()
+    dataset = test1()
 
-    model.train(dataset, 2, callbacks=[], epochs=10)
+    model.train(dataset, 1, callbacks=[PlotCallback()], epochs=10000, learning_rate=0.005)
+
+    x, _ = dataset
+    seq = x[0]
+
+    for x in seq:
+        print(gnn.push(x))
