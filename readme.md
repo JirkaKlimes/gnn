@@ -10,5 +10,6 @@
 
 ## To-Do
 * Implement Adam optimizer
-* Automatically add new neurons and connections
 * Automatically remove dead neurons
+* Method for eporting gnn
+* Create Rust library for fast computation on trained model
