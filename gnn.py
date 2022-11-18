@@ -403,6 +403,16 @@ class Gnn:
             weights_grad = many_weight_grads[cuda.blockIdx.x]
             seq_len = seq_lengths[cuda.blockIdx.x]
 
+            # resets gradients to 0
+            for neuron_indicies in thread_order:
+                neuron_index = int(neuron_indicies[cuda.threadIdx.x])
+                biases_grad[1, neuron_index] = 0
+                biases_grad[0, neuron_index] = 0
+                if neuron_index != -1:
+                    for i in range(digraph.shape[1]):
+                        weights_grad[1, neuron_index, i] = 0
+                        weights_grad[0, neuron_index, i] = 0
+
             # loops throung sequence term indicies
             for term_idx in range(max_seq_len):
                 # stops if sequence is over
@@ -564,9 +574,9 @@ class Gnn:
         activations = cuda.to_device(activations)
         seq_lengths = cuda.to_device(seq_lengths)
 
-        # stores gradients for biases and weights on GPU
-        bias_grads = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
-        weight_grads = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
+        # # stores gradients for biases and weights on GPU
+        # bias_grads = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
+        # weight_grads = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
 
         # block size is maximum number of neurons with same order
         block_size = self.gpu_data["thread_order"].shape[1]
@@ -582,14 +592,14 @@ class Gnn:
                                                       z,
                                                       y,
                                                       seq_lengths,
-                                                      bias_grads,
-                                                      weight_grads,
+                                                      self.gpu_data["bias_grads"],
+                                                      self.gpu_data["weight_grads"],
                                                       self.N_inputs,
                                                       max_seq_len)
         
         # copies gradients back to host
-        bias_grads = bias_grads.copy_to_host()[:, 1]
-        weight_grads = weight_grads.copy_to_host()[:, 1]
+        bias_grads = self.gpu_data["bias_grads"].copy_to_host()[:, 1]
+        weight_grads = self.gpu_data["weight_grads"].copy_to_host()[:, 1]
 
         bias_grad = np.mean(bias_grads, axis=0)
         weight_grad = np.mean(weight_grads, axis=0)
@@ -620,7 +630,7 @@ class Gnn:
         
         return digraph
 
-    def load_GPU_data(self, weights_only: bool = False):
+    def load_GPU_data(self, batch_size, weights_only: bool = False):
         self.gpu_data['weights'] = cuda.to_device(self.weights)
         self.gpu_data['biases'] = cuda.to_device(self.biases)
 
@@ -641,6 +651,10 @@ class Gnn:
             self.gpu_data['order'] = cuda.to_device(self.order)
             # loads transposed digraph to GPU
             self.gpu_data["transposed_digraph"] = cuda.to_device(self._transposed_digraph)
+
+            # stores gradients for biases and weights on GPU
+            self.gpu_data["bias_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
+            self.gpu_data["weight_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
 
 
 if __name__ == "__main__":
