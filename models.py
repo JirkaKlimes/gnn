@@ -251,12 +251,36 @@ class UnnamedModel1(Model):
         pred_y = self.gnn.push_GPU(self.train_x, self.sequence_lengths)
         return self.loss_fn(self.train_y, pred_y)
 
-    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, validation_frequency: int = 10, learning_rate: float = 0.01, callbacks: list = []):
+    def _grow_network(self):
+        pass
+
+    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, lr: float = 0.01, vf: int = 10, ls: float = -0.005, lbs: float = 5, callbacks: list = []):
         """
         Trains the network on dataset
+        
+        Parameters
+        ----------
+        dataset:
+            tuple of x and y lists of sequences
+        batch_size:
+            size of batch backpropagating at once
+        target_loss:
+            training will stop when this loss is reached
+        epochs:
+            training will stop after this many epochs
+        lr:
+            learning rate
+        vf:
+            validation frequency
+        ls:
+            maximum slope in loss for growing network
+        lbs:
+            how many validations to look back for calculating loss slope
+        callbacks:
+            list of callbacks that will be updated when validating the network
         """
 
-        self._learning_rate = learning_rate
+        self._learning_rate = lr
         self._batch_size = batch_size
 
         self._prepare_dataset(dataset)
@@ -268,7 +292,7 @@ class UnnamedModel1(Model):
 
         training_data = {
             "gnn": self.gnn,
-            "val_iters": [],
+            "iters": [],
             "loss": [],
             "number_of_neurons": self.gnn.number_of_neurons,
             "new_neurons_iters": [],
@@ -278,26 +302,30 @@ class UnnamedModel1(Model):
         current_loss = np.Infinity
         current_iter = 0
         while current_iter < epochs or current_loss < target_loss:
+            netwok_grew = False
             current_iter += 1
 
             self._update_batch()
 
             loss = self._validate()
-            print(loss)
 
-            if current_iter % validation_frequency == 0:
+            if current_iter % vf == 0:
+                
+                if len(training_data["loss"]) > lbs:
+                    slope = (training_data["loss"][-1] - training_data["loss"][-lbs]) / vf * lbs
+                    if slope > ls:
+                        training_data["new_neurons_iters"].append(current_iter)
+                        training_data["new_neurons_loss"].append(loss)
+                        self._grow_network()
+                        netwok_grew = True
 
-                # if np.random.random((1)) < 0.2:
-                #     training_data["new_neurons_iters"].append(current_iter)
-                #     training_data["new_neurons_loss"].append(loss)
-
-                training_data["val_iters"].append(current_iter)
+                training_data["iters"].append(current_iter)
                 training_data["loss"].append(loss)
                 training_data["number_of_neurons"] = self.gnn.number_of_neurons
 
                 [callback(training_data) for callback in callbacks]
             
-            self.gnn.load_GPU_data(True)
+            self.gnn.load_GPU_data(not netwok_grew)
 
 
 if __name__ == "__main__":
@@ -317,21 +345,21 @@ if __name__ == "__main__":
 
     model.build()
 
-    # gnn.add_neuron(0, 1, 0.75)
-    # gnn.add_neuron(2, 1, 0.5)
+    gnn.add_neuron(0, 1, 0.75)
+    gnn.add_neuron(2, 1, 0.5)
 
-    gnn.add_neuron(0, 1, 0.9)
-    gnn.add_neuron(2, 1, 0.1)
-    gnn.add_neuron(0, 1, 0.2)
+    # gnn.add_neuron(0, 1, 0.9)
+    # gnn.add_neuron(2, 1, 0.1)
+    # gnn.add_neuron(0, 1, 0.2)
 
-    gnn.add_connection(0, 3)
-    gnn.add_connection(4, 3)
+    # gnn.add_connection(0, 3)
+    # gnn.add_connection(4, 3)
 
-    gnn.add_neuron(3, 1, 0.5)
+    # gnn.add_neuron(3, 1, 0.5)
 
-    gnn.add_connection(5, 4)
-    gnn.add_connection(3, 2)
-    gnn.add_connection(0, 5)
+    # gnn.add_connection(5, 4)
+    # gnn.add_connection(3, 2)
+    # gnn.add_connection(0, 5)
 
     gnn.weights += np.random.normal(size=gnn.weights.shape)
 
@@ -344,7 +372,7 @@ if __name__ == "__main__":
     # dataset = addToSum()
     dataset = test1()
 
-    model.train(dataset, 1, callbacks=[PlotCallback()], epochs=10000, learning_rate=0.005)
+    model.train(dataset, 1, epochs = 10000, lr = 0.005, ls = -0.005, callbacks=[PlotCallback()])
 
     x, _ = dataset
     seq = x[0]
