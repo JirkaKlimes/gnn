@@ -416,7 +416,6 @@ class Gnn:
                         if neuron_index >= N_inputs:
                             activations[term_idx][neuron_index] = activations[term_idx-1][neuron_index]
                 cuda.syncthreads()
-
                 # loops through neurons with same order value (forward pass)
                 for neuron_indicies in thread_order:
 
@@ -464,62 +463,64 @@ class Gnn:
                     # finds neurons index for current thread
                     neuron_index = int(neuron_indicies[cuda.threadIdx.x])
 
-                    # neuron is output neuron
-                    if order[neuron_index] == 1:
+                    # if neuron exists
+                    if neuron_index != -1:
 
-                        # gets gradient of the loss function
-                        output_index = neuron_index-N_inputs
-                        loss_grad = loss_fn_grad(y[term_idx, output_index], activations[term_idx, neuron_index])
+                        # neuron is output neuron
+                        if order[neuron_index] == 1:
 
-                        # multiplies loss gradient by gradient of activation function
-                        b_grad = output_act_fn_grad(z[term_idx, neuron_index]) * loss_grad
+                            # gets gradient of the loss function
+                            output_index = neuron_index-N_inputs
 
-                        # stores bias gradient
-                        biases_grad[0, neuron_index] = b_grad
+                            loss_grad = loss_fn_grad(y[term_idx, output_index], activations[term_idx, neuron_index]) # this is crashing sometime
+                            # multiplies loss gradient by gradient of activation function
+                            b_grad = output_act_fn_grad(z[term_idx, neuron_index]) * loss_grad
 
-                        # loops through all inputs of current neuron
-                        for input_index in range(digraph.shape[1]):
+                            # stores bias gradient
+                            biases_grad[0, neuron_index] = b_grad
+                            # loops through all inputs of current neuron
+                            for input_index in range(digraph.shape[1]):
 
-                            # gets index of current input neuron
-                            input_neuron_index = digraph[neuron_index, input_index]
-                            input_neuron_index = int(input_neuron_index)
+                                # gets index of current input neuron
+                                input_neuron_index = digraph[neuron_index, input_index]
+                                input_neuron_index = int(input_neuron_index)
 
-                            # multiplies activation of input neuron and bias gradient to get weight gradient
-                            activation = activations[term_idx, input_neuron_index]
-                            w_grad = activation * b_grad
+                                # multiplies activation of input neuron and bias gradient to get weight gradient
+                                activation = activations[term_idx, input_neuron_index]
+                                w_grad = activation * b_grad
 
-                            # stores weight gradient
-                            weights_grad[0, neuron_index, input_index] = w_grad
+                                # stores weight gradient
+                                weights_grad[0, neuron_index, input_index] = w_grad
 
-                    else:
-                        delta_sum = 0
+                        else:
+                            delta_sum = 0
 
-                        for next_neuron_index in transposed_digraph[neuron_index]:
-                            next_neuron_index = int(next_neuron_index)
-                            for i, input_index in enumerate(digraph[next_neuron_index]):
-                                if input_index == neuron_index:
-                                    weight = weights[next_neuron_index, i]
+                            for next_neuron_index in transposed_digraph[neuron_index]:
+                                next_neuron_index = int(next_neuron_index)
+                                for i, input_index in enumerate(digraph[next_neuron_index]):
+                                    if input_index == neuron_index:
+                                        weight = weights[next_neuron_index, i]
 
-                                    delta = weight * biases_grad[0, next_neuron_index]
-                                    delta_sum += delta
-                                    break
+                                        delta = weight * biases_grad[0, next_neuron_index]
+                                        delta_sum += delta
+                                        break
 
-                        b_grad = delta_sum * hidden_act_fn_grad(z[term_idx, neuron_index])
-                        biases_grad[0, neuron_index] = b_grad
+                            b_grad = delta_sum * hidden_act_fn_grad(z[term_idx, neuron_index])
+                            biases_grad[0, neuron_index] = b_grad
 
-                        # loops through all inputs of current neuron
-                        for input_index in range(digraph.shape[1]):
+                            # loops through all inputs of current neuron
+                            for input_index in range(digraph.shape[1]):
 
-                            # gets index of current input neuron
-                            input_neuron_index = digraph[neuron_index, input_index]
-                            input_neuron_index = int(input_neuron_index)
+                                # gets index of current input neuron
+                                input_neuron_index = digraph[neuron_index, input_index]
+                                input_neuron_index = int(input_neuron_index)
 
-                            # multiplies activation of input neuron and bias gradient to get weight gradient
-                            activation = activations[term_idx, input_neuron_index]
-                            w_grad = activation * b_grad
+                                # multiplies activation of input neuron and bias gradient to get weight gradient
+                                activation = activations[term_idx, input_neuron_index]
+                                w_grad = activation * b_grad
 
-                            # stores weight gradient
-                            weights_grad[0, neuron_index, input_index] = w_grad
+                                # stores weight gradient
+                                weights_grad[0, neuron_index, input_index] = w_grad
 
                 cuda.syncthreads()
 
@@ -564,8 +565,8 @@ class Gnn:
         seq_lengths = cuda.to_device(seq_lengths)
 
         # stores gradients for biases and weights on GPU
-        bias_grads = cuda.to_device(np.zeros((2, batch_size, *self.biases.shape)))
-        weight_grads = cuda.to_device(np.zeros((2, batch_size, *self.weights.shape)))
+        bias_grads = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
+        weight_grads = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
 
         # block size is maximum number of neurons with same order
         block_size = self.gpu_data["thread_order"].shape[1]
@@ -587,8 +588,8 @@ class Gnn:
                                                       max_seq_len)
         
         # copies gradients back to host
-        bias_grads = bias_grads.copy_to_host()[1]
-        weight_grads = weight_grads.copy_to_host()[1]
+        bias_grads = bias_grads.copy_to_host()[:, 1]
+        weight_grads = weight_grads.copy_to_host()[:, 1]
 
         bias_grad = np.mean(bias_grads, axis=0)
         weight_grad = np.mean(weight_grads, axis=0)
