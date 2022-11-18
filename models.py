@@ -1,8 +1,9 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from math import ceil
+
 from activations import Activation
 from losses import Loss
-
 from gnn import Gnn
 
 class Model(ABC):
@@ -18,6 +19,12 @@ class Model(ABC):
 
         # loss function
         self.loss_fn = None
+
+        # memory neurons can't grow by default
+        self._memory_allowed = False
+
+    def allow_memory(self):
+        self._memory_allowed = True
 
     def set_hidden_act_function(self, func: Activation):
         """
@@ -101,9 +108,9 @@ class UnnamedModel1(Model):
                 weight_index = self.gnn.add_connection(i, o)
                 self.gnn.weights[o, weight_index] = np.random.normal(size=(1))
 
-    def _add_neuron_randomly(self, new_order_chance: float = 0.1, memory_chance: float = 0):
+    def _add_neuron_randomly(self, new_order_probability: float = 0.1, memory_probability: float = 0):
         # decides if new order will be created for new neuron
-        if np.random.random((1)) < new_order_chance:
+        if np.random.random((1)) < new_order_probability:
             
             # removes -1 (input layer) and adds 0
             posible_order_values = list(set(self.gnn.order_values + [0]) - {-1})
@@ -123,7 +130,7 @@ class UnnamedModel1(Model):
             order_value = np.random.choice(posible_order_values)
 
         # decides if neuron will be of memory type (will be using old activations for new calculations)
-        if np.random.random((1)) < memory_chance:
+        if np.random.random((1)) < memory_probability:
 
             # get indicies of all neurons with higher or same order value
             posibble_from_neurons = np.where(self.gnn.order >= order_value)[0]
@@ -158,10 +165,10 @@ class UnnamedModel1(Model):
 
         return True
 
-    # this is only prototype method
-    def _add_connection_randomly(self, memory_chance: float = 0):
+    # prototype method, memory can't form
+    def _add_connection_randomly(self, memory_probability: float = 0):
         # decides if connection will be of memory type (will be using old activations for new calculations)
-        if np.random.random((1)) < memory_chance:
+        if np.random.random((1)) < memory_probability:
             pass
 
         else:
@@ -198,10 +205,204 @@ class UnnamedModel1(Model):
         self._set_gnn_parameters()
         self._fully_connect()
         self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
+        self.gnn.create_backprop_kernel()
+        self.gnn.create_push_kernel()
         self._isBuilt = True
 
+    def convert_dataset(self, dataset):
+        train_x, train_y = dataset
+        train_x = train_x.reshape(train_x.shape[0], 1, train_x.shape[1])
+        train_y = train_y.reshape(train_y.shape[0], 1, train_y.shape[1])
+        return (train_x, train_y)
 
-    def train(self, dataset, batch_size: int = None, target_loss: float = 0.01, validation_frequency: int = 10, learning_rate: float = 0.01):
+    def _prepare_dataset(self, dataset):
+        train_x, train_y = dataset
+
+        # gets lengths of all sequences and maximum sequence length
+        self.sequence_lengths = np.array(list(map(len, train_x)))
+        max_seq_len = self.sequence_lengths.max()
+
+        # fills short sequences with zeros
+        symetric_train_x = []
+        symetric_train_y = []
+        for seq_len, x_seq, y_seq in zip(self.sequence_lengths, train_x, train_y):
+            sym_x_seq = np.zeros((max_seq_len, self.gnn.N_inputs))
+            sym_y_seq = np.zeros((max_seq_len, self.gnn.N_outputs))
+            sym_x_seq[:seq_len, :] = x_seq
+            sym_y_seq[:seq_len, :] = y_seq
+            symetric_train_x.append(sym_x_seq)
+            symetric_train_y.append(sym_y_seq)
+
+        self.train_x = np.array(symetric_train_x)
+        self.train_y = np.array(symetric_train_y)
+
+        self.dataset_length = self.train_x.shape[0]
+
+    def _get_batch(self, size):
+        # randomly picks "size" indicies
+        b_size = size if size <= self.dataset_length else self.dataset_length
+        data_indicies = np.arange(self.dataset_length)
+        picked_indicies = np.random.choice(data_indicies, b_size, replace=False)
+
+        # returns x, y and sequence lenghts on those indicies
+        x = self.train_x[picked_indicies]
+        y = self.train_y[picked_indicies]
+        seq_lengths = self.sequence_lengths[picked_indicies]
+        return x, y, seq_lengths
+
+    # prototype (gradient momentum not implemented)
+    def _update_batch(self):
+        # gets gradients and updates weights and biases
+        x_batch, y_batch, seq_lenghts = self._get_batch(self._batch_size)
+
+        b_grad, w_grad = self.gnn.backprop_GPU(x_batch, y_batch, seq_lenghts)
+
+        self.gnn.biases -= b_grad * self._learning_rate
+        self.gnn.weights -= w_grad * self._learning_rate
+
+    def _validate(self):
+        pred_y = self.gnn.push_GPU(self.train_x, self.sequence_lengths)
+        return self.loss_fn(self.train_y, pred_y)
+
+    def _grow_network(self, grow_ratio, memory_probability, new_order_probability):
+        if not self._memory_allowed:
+            memory_probability = 0
+        n_neurons = self.gnn.order.shape[0] - self.gnn.N_inputs
+        n_new_neurons = ceil(n_neurons * grow_ratio)
+        for _ in range(n_new_neurons):
+            self._add_neuron_randomly(new_order_probability, memory_probability)
+        
+        n_connections = np.count_nonzero(self.gnn.digraph.flatten() + 1)
+        n_new_connections = ceil(n_connections * grow_ratio)
+        for _ in range(n_new_connections):
+            self._add_connection_randomly(memory_probability)
+
+    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity,
+                    lr: float = 0.01, vf: int = 10, ls: float = -0.005, lbs: float = 5, gr: float = 0.01,
+                    gd: int = 10, mp: float = 0.05, nop: float = 0.05, callbacks: list = []):
         """
         Trains the network on dataset
+        
+        Parameters
+        ----------
+        dataset:
+            tuple of x and y lists of sequences
+        batch_size:
+            size of batch backpropagating at once
+        target_loss:
+            training will stop when this loss is reached
+        epochs:
+            training will stop after this many epochs
+        lr:
+            learning rate
+        vf:
+            validation frequency
+        ls:
+            maximum slope in loss for growing network
+        lbs:
+            how many validations to look back for calculating loss slope
+        gr:
+            how much neurons should be added
+        gd:
+            how many validations to wait before new neurons can grow
+        mp:
+            probability that new neuron / connection will have memory
+        nop:
+            probability that new neuron will create new order value
+        callbacks:
+            list of callbacks that will be updated when validating the network
         """
+
+        self._learning_rate = lr
+        self._batch_size = batch_size
+
+        self._prepare_dataset(dataset)
+        self.gnn.create_backprop_kernel()
+        self.gnn.create_push_kernel()
+        self.gnn.load_GPU_data(batch_size)
+
+        [callback.create() for callback in callbacks]
+
+        training_data = {
+            "gnn": self.gnn,
+            "epochs": [],
+            "loss": [],
+            "number_of_neurons": self.gnn.number_of_neurons,
+            "new_neurons_epochs": [],
+            "new_neurons_loss": []
+        }
+
+        current_loss = np.Infinity
+        current_epoch = 0
+        last_grow = 0
+        while current_epoch < epochs and current_loss > target_loss:
+            netwok_grew = False
+            current_epoch += 1
+
+            self._update_batch()
+
+            current_loss = self._validate()
+
+            if current_epoch % vf == 0:
+
+                if len(training_data["loss"]) > lbs:
+                    slope = (training_data["loss"][-1] - training_data["loss"][-lbs]) / vf * lbs
+
+                    current_validation = current_epoch / vf
+                    if slope > ls and current_validation > last_grow + gd:
+                        training_data["new_neurons_epochs"].append(current_epoch)
+                        training_data["new_neurons_loss"].append(current_loss)
+
+                        last_grow = current_validation
+                        self._grow_network(gr, mp, nop)
+                        netwok_grew = True
+
+                training_data["epochs"].append(current_epoch)
+                training_data["loss"].append(current_loss)
+                training_data["number_of_neurons"] = self.gnn.number_of_neurons
+
+                [callback(training_data) for callback in callbacks]
+
+            self.gnn.load_GPU_data(batch_size, not netwok_grew)
+
+
+if __name__ == "__main__":
+    from activations import Relu, Identity
+    from losses import MeanSquaredError
+    from callbacks import PlotCallback, StdOutCallback
+    import tensorflow as tf
+
+    gnn = Gnn(784, 10)
+
+    model = UnnamedModel1(gnn)
+    model.set_hidden_act_function(Relu())
+    model.set_output_act_function(Identity())
+    model.set_loss_function(MeanSquaredError())
+
+    model.build()
+
+    (x_train, _y_train), (x_test, _y_test) = tf.keras.datasets.mnist.load_data()
+
+    SIZE = 1000
+
+    x_train = tf.keras.utils.normalize(x_train, axis=1)[:SIZE]
+    x_test = tf.keras.utils.normalize(x_test, axis=1)[:SIZE]
+    _y_train = _y_train[:SIZE]
+    _y_test = _y_test[:SIZE]
+
+    y_train = np.zeros((_y_train.size, _y_train.max() + 1))
+    y_train[np.arange(_y_train.size), _y_train] = 1
+
+    y_test = np.zeros((_y_test.size, _y_test.max() + 1))
+    y_test[np.arange(_y_test.size), _y_test] = 1
+
+    dataset = model.convert_dataset((x_train.reshape(SIZE, -1), y_train))
+
+    model.train(dataset, 100, target_loss = 0.05,
+                lr = 0.2, ls = -0.005, gr = 0.01, gd = 10,
+                nop = 0.05,
+                callbacks=[PlotCallback(), StdOutCallback()])
+
+    """
+    Learned in 4500 epochs, that took 26 minuts on my pc
+    """
