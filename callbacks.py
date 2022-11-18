@@ -1,18 +1,17 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 class TrainingCallback(ABC):
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         super().__init__()
 
     def __call__(self, data):
         self.update(data)
 
-    @abstractmethod
     def create(self):
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def update(self, data):
@@ -25,14 +24,14 @@ class PlotCallback(TrainingCallback):
         self.ax = self.fig.add_subplot(111)
 
     def plot_loss(self):
-        x = np.array(self.data["iters"])
+        x = np.array(self.data["epochs"])
         y = np.array(self.data["loss"])
         y = np.log(y+1)
 
         self.ax.plot(x, y, "k-", label="ln(loss)", linewidth=1)
 
     def plot_new_neurons(self):
-        x = np.array(self.data["new_neurons_iters"])
+        x = np.array(self.data["new_neurons_epochs"])
         y = np.array(self.data["new_neurons_loss"])
         y = np.log(y+1)
         
@@ -51,3 +50,21 @@ class PlotCallback(TrainingCallback):
         self.ax.legend(loc="upper right")
         plt.draw()
         plt.pause(0.0001)
+
+class StdOutCallback(TrainingCallback):
+    def __init__(self, clear_stdout: bool = True):
+        super().__init__()
+        self.clear_stdout = clear_stdout
+
+    def update(self, data):
+        epoch = data["epochs"][-1]
+        loss = data["loss"][-1]
+        loss_fn = data['gnn'].loss_fn
+        N_neurons = data['gnn'].order.shape[0] - data['gnn'].N_inputs
+
+        if self.clear_stdout: os.system('cls')
+        print(f"=============================")
+        print(f"Epoch: {epoch}")
+        print(f"{loss_fn}: {loss}")
+        print(f"Number of neurons: {N_neurons}")
+        print(f"=============================")
