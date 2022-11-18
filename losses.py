@@ -32,7 +32,7 @@ class MeanSquaredError(Loss):
         # multiply the squared error by 1/2 so when
         # we take the derivative the 2 in the power gets cancelled with the 1/2 multiplier
         # calculation is cleaner this way
-        return 0.5 * np.linalg.norm(y_pred - y_true) ** 2
+        return np.mean(0.5 * (y_pred - y_true) ** 2)
 
     def grad(self, y_true, y_pred):
         return y_pred - y_true
