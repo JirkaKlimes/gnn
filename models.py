@@ -370,8 +370,7 @@ if __name__ == "__main__":
     from activations import Relu, Identity
     from losses import MeanSquaredError
     from callbacks import PlotCallback, StdOutCallback
-
-    from sequence_datasets import addToSum, test1
+    import tensorflow as tf
 
     gnn = Gnn(784, 10)
 
@@ -381,8 +380,6 @@ if __name__ == "__main__":
     model.set_loss_function(MeanSquaredError())
 
     model.build()
-
-    import tensorflow as tf
 
     (x_train, _y_train), (x_test, _y_test) = tf.keras.datasets.mnist.load_data()
 
@@ -405,3 +402,7 @@ if __name__ == "__main__":
                 lr = 0.2, ls = -0.005, gr = 0.01, gd = 10,
                 nop = 0.05,
                 callbacks=[PlotCallback(), StdOutCallback()])
+
+    """
+    Learned in 4500 epochs, that took 26 minuts on my pc
+    """
