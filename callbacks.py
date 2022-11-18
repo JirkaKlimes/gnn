@@ -62,9 +62,13 @@ class StdOutCallback(TrainingCallback):
         loss_fn = data['gnn'].loss_fn
         N_neurons = data['gnn'].order.shape[0] - data['gnn'].N_inputs
 
-        if self.clear_stdout: os.system('cls')
-        print(f"=============================")
-        print(f"Epoch: {epoch}")
-        print(f"{loss_fn}: {loss}")
-        print(f"Number of neurons: {N_neurons}")
-        print(f"=============================")
+        if self.clear_stdout:
+            os.system('cls')
+            print(f"|=============================")
+            print(f"| Epoch: {epoch}")
+            print(f"| {loss_fn}: {loss}")
+            print(f"| Number of neurons: {N_neurons}")
+            print(f"|=============================")
+        else:
+            print(f"|===========================================================================")
+            print(f"| Epoch: {epoch} | {loss_fn}: {round(loss, 5)} | Number of neurons: {N_neurons}")
