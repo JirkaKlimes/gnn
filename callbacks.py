@@ -61,6 +61,7 @@ class StdOutCallback(TrainingCallback):
         loss = data["loss"][-1]
         loss_fn = data['gnn'].loss_fn
         N_neurons = data['gnn'].order.shape[0] - data['gnn'].N_inputs
+        N_layers = len(data['gnn'].order_values)
 
         if self.clear_stdout:
             os.system('cls')
@@ -68,6 +69,7 @@ class StdOutCallback(TrainingCallback):
             print(f"| Epoch: {epoch}")
             print(f"| {loss_fn}: {loss}")
             print(f"| Number of neurons: {N_neurons}")
+            print(f"| Number of layers: {N_layers}")
             print(f"|=============================")
         else:
             print(f"|===========================================================================")
