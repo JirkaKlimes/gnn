@@ -1,6 +1,7 @@
 import numpy as np
 from numba import cuda
 from collections import Counter
+from math import ceil
 
 class Gnn:
     def __init__(self, N_inputs: int, N_outputs: int):
@@ -289,14 +290,18 @@ class Gnn:
             activations = many_activations[cuda.blockIdx.x]
             seq_len = seq_lengths[cuda.blockIdx.x]
 
+            # loops throung sequence term indicies
             for term_idx in range(max_seq_len):
+                # stops if sequence is over
                 if term_idx >= seq_len:
-                    continue
+                    break
 
-                if cuda.threadIdx.x == 0:
-                    if term_idx > 0:
-                        for i in range(N_inputs, order.shape[0]):
-                            activations[term_idx][i] = activations[term_idx-1][i]
+                # loads activations of last term to activations in current term
+                if term_idx > 0:
+                    for s in range(ceil(order.shape[0] / thread_order.shape[1])):
+                        neuron_index = cuda.threadIdx.x * s
+                        if neuron_index >= N_inputs:
+                            activations[term_idx][neuron_index] = activations[term_idx-1][neuron_index]
                 cuda.syncthreads()
 
                 # loops through neurons with same order value (forward pass)
@@ -398,14 +403,18 @@ class Gnn:
             weights_grad = many_weight_grads[cuda.blockIdx.x]
             seq_len = seq_lengths[cuda.blockIdx.x]
 
+            # loops throung sequence term indicies
             for term_idx in range(max_seq_len):
+                # stops if sequence is over
                 if term_idx >= seq_len:
-                    continue
+                    break
 
-                if cuda.threadIdx.x == 0:
-                    if term_idx > 0:
-                        for i in range(N_inputs, order.shape[0]):
-                            activations[term_idx][i] = activations[term_idx-1][i]
+                # loads activations of last term to activations in current term
+                if term_idx > 0:
+                    for s in range(ceil(order.shape[0] / thread_order.shape[1])):
+                        neuron_index = cuda.threadIdx.x * s
+                        if neuron_index >= N_inputs:
+                            activations[term_idx][neuron_index] = activations[term_idx-1][neuron_index]
                 cuda.syncthreads()
 
                 # loops through neurons with same order value (forward pass)
@@ -442,9 +451,13 @@ class Gnn:
                     # waits for all threads to finish current order value
                     cuda.syncthreads()
 
+             # loops throung sequence term indicies in reverse
             for term_idx in range(max_seq_len-1, -1, -1):
+
+                # stops if sequence is over
                 if term_idx >= seq_len:
-                    continue
+                    break
+
                 # loops through neurons with same order value (backward pass)
                 for neuron_indicies in thread_order[::-1]:
 
@@ -509,6 +522,8 @@ class Gnn:
                             weights_grad[0, neuron_index, input_index] = w_grad
 
                 cuda.syncthreads()
+
+                # adds current term gradients to sum
                 for neuron_indicies in thread_order:
                     neuron_index = int(neuron_indicies[cuda.threadIdx.x])
                     biases_grad[1, neuron_index] += biases_grad[0, neuron_index]
@@ -517,13 +532,13 @@ class Gnn:
                             weights_grad[1, neuron_index, i] += weights_grad[0, neuron_index, i]
                 cuda.syncthreads()
 
+            # calculates mean of greadients of all terms
             for neuron_indicies in thread_order:
                 neuron_index = int(neuron_indicies[cuda.threadIdx.x])
                 biases_grad[1, neuron_index] /= seq_len
                 if neuron_index != -1:
                     for i in range(digraph.shape[1]):
                         weights_grad[1, neuron_index, i] /= seq_len
-
 
         self._backprop_kernel = kernel
 
@@ -625,8 +640,6 @@ class Gnn:
             self.gpu_data['order'] = cuda.to_device(self.order)
             # loads transposed digraph to GPU
             self.gpu_data["transposed_digraph"] = cuda.to_device(self._transposed_digraph)
-
-
 
 
 if __name__ == "__main__":
