@@ -1,5 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from math import ceil
 
 from activations import Activation
 from losses import Loss
@@ -18,6 +19,12 @@ class Model(ABC):
 
         # loss function
         self.loss_fn = None
+
+        # memory neurons can't grow by default
+        self.allow_memory = False
+
+    def allow_memory(self):
+        self.allow_memory = True
 
     def set_hidden_act_function(self, func: Activation):
         """
@@ -101,9 +108,9 @@ class UnnamedModel1(Model):
                 weight_index = self.gnn.add_connection(i, o)
                 self.gnn.weights[o, weight_index] = np.random.normal(size=(1))
 
-    def _add_neuron_randomly(self, new_order_chance: float = 0.1, memory_chance: float = 0):
+    def _add_neuron_randomly(self, new_order_probability: float = 0.1, memory_probability: float = 0):
         # decides if new order will be created for new neuron
-        if np.random.random((1)) < new_order_chance:
+        if np.random.random((1)) < new_order_probability:
             
             # removes -1 (input layer) and adds 0
             posible_order_values = list(set(self.gnn.order_values + [0]) - {-1})
@@ -123,7 +130,7 @@ class UnnamedModel1(Model):
             order_value = np.random.choice(posible_order_values)
 
         # decides if neuron will be of memory type (will be using old activations for new calculations)
-        if np.random.random((1)) < memory_chance:
+        if np.random.random((1)) < memory_probability:
 
             # get indicies of all neurons with higher or same order value
             posibble_from_neurons = np.where(self.gnn.order >= order_value)[0]
@@ -158,10 +165,10 @@ class UnnamedModel1(Model):
 
         return True
 
-    # this is only prototype method
-    def _add_connection_randomly(self, memory_chance: float = 0):
+    # prototype method, memory can't form
+    def _add_connection_randomly(self, memory_probability: float = 0):
         # decides if connection will be of memory type (will be using old activations for new calculations)
-        if np.random.random((1)) < memory_chance:
+        if np.random.random((1)) < memory_probability:
             pass
 
         else:
@@ -251,10 +258,20 @@ class UnnamedModel1(Model):
         pred_y = self.gnn.push_GPU(self.train_x, self.sequence_lengths)
         return self.loss_fn(self.train_y, pred_y)
 
-    def _grow_network(self):
-        pass
+    def _grow_network(self, grow_ratio, memory_probability, new_order_probability):
+        n_neurons = self.gnn.order.shape[0] - self.gnn.N_inputs
+        n_new_neurons = ceil(n_neurons * grow_ratio)
+        for _ in range(n_new_neurons):
+            self._add_neuron_randomly(new_order_probability, memory_probability)
+        
+        n_connections = np.count_nonzero(self.gnn.digraph.flatten() + 1)
+        n_new_connections = ceil(n_connections * grow_ratio)
+        for _ in range(n_new_connections):
+            self._add_connection_randomly(memory_probability)
 
-    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity, lr: float = 0.01, vf: int = 10, ls: float = -0.005, lbs: float = 5, callbacks: list = []):
+    def train(self, dataset, batch_size: int = None, target_loss: float = 0, epochs: int = np.Infinity,
+                    lr: float = 0.01, vf: int = 10, ls: float = -0.005, lbs: float = 5, gr: float = 0.01,
+                    gd: int = 10, mp: float = 0.05, nop: float = 0.2, callbacks: list = []):
         """
         Trains the network on dataset
         
@@ -276,6 +293,14 @@ class UnnamedModel1(Model):
             maximum slope in loss for growing network
         lbs:
             how many validations to look back for calculating loss slope
+        gr:
+            how much neurons should be added
+        gd:
+            how many validations to wait before new neurons can grow
+        mp:
+            probability that new neuron / connection will be memory
+        nop:
+            probability that new neuron will create new order value
         callbacks:
             list of callbacks that will be updated when validating the network
         """
@@ -292,46 +317,51 @@ class UnnamedModel1(Model):
 
         training_data = {
             "gnn": self.gnn,
-            "iters": [],
+            "epochs": [],
             "loss": [],
             "number_of_neurons": self.gnn.number_of_neurons,
-            "new_neurons_iters": [],
+            "new_neurons_epochs": [],
             "new_neurons_loss": []
         }
 
         current_loss = np.Infinity
-        current_iter = 0
-        while current_iter < epochs or current_loss < target_loss:
+        current_epoch = 0
+        last_grow = 0
+        while current_epoch < epochs or current_loss < target_loss:
             netwok_grew = False
-            current_iter += 1
+            current_epoch += 1
 
             self._update_batch()
 
             loss = self._validate()
 
-            if current_iter % vf == 0:
-                
+            if current_epoch % vf == 0:
+
                 if len(training_data["loss"]) > lbs:
                     slope = (training_data["loss"][-1] - training_data["loss"][-lbs]) / vf * lbs
-                    if slope > ls:
-                        training_data["new_neurons_iters"].append(current_iter)
+
+                    current_validation = current_epoch / vf
+                    if slope > ls and current_validation > last_grow + gd:
+                        training_data["new_neurons_epochs"].append(current_epoch)
                         training_data["new_neurons_loss"].append(loss)
-                        self._grow_network()
+
+                        last_grow = current_validation
+                        self._grow_network(gr, mp, nop)
                         netwok_grew = True
 
-                training_data["iters"].append(current_iter)
+                training_data["epochs"].append(current_epoch)
                 training_data["loss"].append(loss)
                 training_data["number_of_neurons"] = self.gnn.number_of_neurons
 
                 [callback(training_data) for callback in callbacks]
-            
+
             self.gnn.load_GPU_data(not netwok_grew)
 
 
 if __name__ == "__main__":
     from activations import Relu, Identity
     from losses import MeanSquaredError
-    from callbacks import PlotCallback
+    from callbacks import PlotCallback, StdOutCallback
 
     from sequence_datasets import addToSum, test1
     from pprint import pprint
@@ -342,6 +372,7 @@ if __name__ == "__main__":
     model.set_hidden_act_function(Relu())
     model.set_output_act_function(Identity())
     model.set_loss_function(MeanSquaredError())
+    model.allow_memory()
 
     model.build()
 
@@ -372,7 +403,7 @@ if __name__ == "__main__":
     # dataset = addToSum()
     dataset = test1()
 
-    model.train(dataset, 1, epochs = 10000, lr = 0.005, ls = -0.005, callbacks=[PlotCallback()])
+    model.train(dataset, 1, epochs = 10000, lr = 0.005, ls = -0.005, gr = 0.01, gd = 10, callbacks=[PlotCallback(), StdOutCallback()])
 
     x, _ = dataset
     seq = x[0]
