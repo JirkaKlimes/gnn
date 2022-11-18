@@ -21,10 +21,10 @@ class Model(ABC):
         self.loss_fn = None
 
         # memory neurons can't grow by default
-        self.allow_memory = False
+        self._memory_allowed = False
 
     def allow_memory(self):
-        self.allow_memory = True
+        self._memory_allowed = True
 
     def set_hidden_act_function(self, func: Activation):
         """
@@ -209,6 +209,12 @@ class UnnamedModel1(Model):
         self.gnn.create_push_kernel()
         self._isBuilt = True
 
+    def convert_dataset(self, dataset):
+        train_x, train_y = dataset
+        train_x = train_x.reshape(train_x.shape[0], 1, train_x.shape[1])
+        train_y = train_y.reshape(train_y.shape[0], 1, train_y.shape[1])
+        return (train_x, train_y)
+
     def _prepare_dataset(self, dataset):
         train_x, train_y = dataset
 
@@ -259,6 +265,8 @@ class UnnamedModel1(Model):
         return self.loss_fn(self.train_y, pred_y)
 
     def _grow_network(self, grow_ratio, memory_probability, new_order_probability):
+        if not self._memory_allowed:
+            memory_probability = 0
         n_neurons = self.gnn.order.shape[0] - self.gnn.N_inputs
         n_new_neurons = ceil(n_neurons * grow_ratio)
         for _ in range(n_new_neurons):
@@ -366,47 +374,29 @@ if __name__ == "__main__":
     from sequence_datasets import addToSum, test1
     from pprint import pprint
 
+    np.random.seed(1)
+
     gnn = Gnn(1, 1)
 
     model = UnnamedModel1(gnn)
     model.set_hidden_act_function(Relu())
     model.set_output_act_function(Identity())
     model.set_loss_function(MeanSquaredError())
-    model.allow_memory()
+    # model.allow_memory()
 
     model.build()
 
-    gnn.add_neuron(0, 1, 0.75)
-    gnn.add_neuron(2, 1, 0.5)
-
-    # gnn.add_neuron(0, 1, 0.9)
-    # gnn.add_neuron(2, 1, 0.1)
-    # gnn.add_neuron(0, 1, 0.2)
-
-    # gnn.add_connection(0, 3)
-    # gnn.add_connection(4, 3)
-
-    # gnn.add_neuron(3, 1, 0.5)
-
-    # gnn.add_connection(5, 4)
-    # gnn.add_connection(3, 2)
-    # gnn.add_connection(0, 5)
+    for _ in range(100):
+        model._add_neuron_randomly(0.5, 0.2)
+    for _ in range(200):
+        model._add_connection_randomly(0.2)
 
     gnn.weights += np.random.normal(size=gnn.weights.shape)
 
+    train_x = np.linspace(0, np.pi, 250).reshape(-1, 1)
+    train_y = np.sin(train_x)
 
-    # train_x = np.linspace(0, np.pi, 5).reshape(-1, 1)
-    # train_y = np.sin(train_x)
+    dataset = (train_x, train_y)
+    dataset = model.convert_dataset(dataset)
 
-    # dataset = (train_x, train_y)
-
-    # dataset = addToSum()
-    dataset = test1()
-
-    model.train(dataset, 1, epochs = 10000, lr = 0.005, ls = -0.005, gr = 0.01, gd = 10, callbacks=[PlotCallback(), StdOutCallback()])
-
-    x, _ = dataset
-    seq = x[0]
-
-    for x in seq:
-        print(gnn.push(x))
+    model.train(dataset, 50, epochs=10000, lr = 0.01, ls = -0.005, gr = 0.01, gd = 10, callbacks=[PlotCallback(), StdOutCallback()])
