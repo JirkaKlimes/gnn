@@ -1,0 +1,52 @@
+number_of_inputs = 2
+number_of_outputs = 4
+number_of_neurons = 16
+max_number_of_inputs = 13
+hidden_activation_function = relu
+output_activation_function = identity
+
+training_date = 10.4.1998 10:30:50
+save_date = 5.10.2022 14:35:51
+
+
+
+
+
+[METADATA]
+activation order
+activation order
+activation order input input input input input input input input input input
+activation order input input input input input
+activation order input input input input input input input input input input input input
+activation order input input input input input input input input input input input input input
+activation order input input input input input input input input input
+activation order input input input input input input input input input input input input input
+activation order input input input input input input input input input input
+activation order input input input input input input input input input input input input input
+activation order input input input input input input
+activation order input input input input input input input input input input input input input
+activation order input input input input input input
+activation order input input input input input input input input input input
+activation order input input input input input input input input input input input
+activation order input input input input
+activation order input input input input input input input input input input input input input
+activation order input input input input input input input input input
+
+bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias bias
+
+weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight
+weight weight weight weight weight weight weight weight weight weight weight weight weight
+weight weight weight weight weight weight weight weight weight
