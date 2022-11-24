@@ -2,9 +2,9 @@ import numpy as np
 from abc import ABC, abstractmethod
 from math import ceil
 
-from activations import Activation
-from losses import Loss
-from gnn import Gnn
+from .activations import Activation
+from .losses import Loss
+from .gnn import Gnn
 
 class Model(ABC):
     def __init__(self, **kwargs):
