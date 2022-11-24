@@ -2,6 +2,10 @@ import numpy as np
 from numba import cuda
 from collections import Counter
 from math import ceil
+from pathlib import Path
+from datetime import datetime
+import ctypes
+
 
 class Gnn:
     def __init__(self, N_inputs: int, N_outputs: int):
@@ -20,6 +24,9 @@ class Gnn:
         self.N_outputs = N_outputs
 
         self._initialize_network()
+
+        self._creation_date = datetime.now()
+        self._last_training_date = None
 
     def _initialize_network(self):
         """
@@ -656,96 +663,99 @@ class Gnn:
             self.gpu_data["bias_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
             self.gpu_data["weight_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
 
+    def _float2ascii(self, float, bchars):
+        """
+        Converts float to ascii with perfect accuracy and low char count
+        """
+        # we move buffer of float to uint adress and get it's value
+        n = ctypes.c_uint32.from_buffer(ctypes.c_float(float)).value
 
-if __name__ == "__main__":
+        # simple base conversion of unsigned integer
+        base = len(bchars)
+        if n == 0: return bchars[0]
+        res = ''
+        while n > 0:
+            digit = n % base
+            res = bchars[digit] + res
+            n = n // base
+        return res
 
-    from activations import Relu, Identity
-    from losses import MeanSquaredError
+    def export(self, file: str = 'export.gnn', overwrite: bool = False):
+        """
+        Exports Growing Neural Netwrok into ascii document
+        that can be opened by text editor but it's still very space efficient
+        """
 
-    # create gnn with 4 inputs and 2 outputs
-    gnn = Gnn(4, 2)
+        file = Path(file).absolute()
+        # add .gnn suffix if it isn't present
+        file = file if file.suffix == ".gnn" else file.with_suffix(file.suffix + ".gnn")
 
-    # sets activations functions
-    gnn.hidden_act_fn = Relu()
-    gnn.output_act_fn = Identity()
+        if file.is_file() and not overwrite:
+            raise FileExistsError
 
-    # sets loss function to be used to calculate gradient
-    gnn.loss_fn = MeanSquaredError()
+        # string containing all printable ascii characters
+        PRINTABLE_ASCII = ''.join(chr(k) for k in range(128) if len(repr(chr(k))) == 3)
+        base = PRINTABLE_ASCII
 
+        with open(file, 'w', encoding='ascii') as f:
+            # write overvies about neural network 
+            f.write("[GNN]\n")
+            f.write(f"{'INPUTS':<20}{self.N_inputs}\n")
+            f.write(f"{'OUTPUTS':<20}{self.N_outputs}\n")
+            f.write(f"{'NEURONS':<20}{self.order.shape[0]}\n")
+            f.write(f"{'HIDDEN ACT FN':<20}{self.hidden_act_fn}\n")
+            f.write(f"{'OUTPUT ACT FN':<20}{self.output_act_fn}\n")
+            f.write("\n")
+            
+            # writes important dates
+            f.write("[DATES]\n")
+            f.write(f"{'CREATION DATE':<20}{self._creation_date}\n")
+            f.write(f"{'LAST TRAINING DATE':<20}{self._last_training_date}\n")
+            f.write(f"{'SAVE DATE':<20}{datetime.now()}\n")
+            f.write("\n")
 
+            # writes metadata of neural network
+            f.write("[METADATA]\n")
+            # writes base that was used for encoding numbers
+            f.write(base)
+            f.write("\n")
 
+            # we set activations to 0s with there aren't any
+            if self.activations is None:
+                self.activations = np.zeros_like(self.order)
 
+            # loop over every neuron
+            for neuron in range(self.order.shape[0]):
 
+                # converts neurons activation, order and all inputs to ascii
+                encoded = self._float2ascii(self.activations[neuron], base)
 
+                # justifies for fixed length
+                encoded = encoded.rjust(6, base[0])
 
+                f.write(encoded)
+                encoded = self._float2ascii(self.order[neuron], base)
+                encoded = encoded.rjust(6, base[0])
+                f.write(encoded)
+                for input in self.digraph[neuron]:
 
+                    # we dont need to write not connected inputs
+                    if input == -1: break
 
+                    encoded = self._float2ascii(input, base)
+                    encoded = encoded.rjust(6, base[0])
+                    f.write(encoded)
+                f.write("\n")
 
+            for bias in self.biases:
+                encoded = self._float2ascii(bias, base)
+                encoded = encoded.rjust(6, base[0])
+                f.write(encoded)
+            f.write("\n")
 
-
-
-
-
-
-
-
-
-
-
-    # # adds few connections
-    # gnn.add_connection(0, 4)
-    # gnn.add_connection(1, 4)
-    # gnn.add_connection(2, 5)
-    # gnn.add_connection(3, 5)
-
-    # # adds new neuron that will be calculated before output
-    # gnn.add_neuron(0, 4, 0.5)
-
-    # # adds more connections to new neuron
-    # gnn.add_connection(3, 6)
-    # gnn.add_connection(6, 5)
-
-    # # randomize weights and biases of neurons
-    # gnn.weights[4, :] = np.random.normal(size=(1, 3))
-    # gnn.weights[5, :] = np.random.normal(size=(1, 3))
-    # gnn.weights[6, :2] = np.random.normal(size=(1, 2))
-
-    # gnn.biases[-3:] = np.random.normal(size=(1, 3))
-
-    # # pushes some data through the network
-    # x = np.array([0, 1, 2, 3])
-    # y = gnn.push(x)
-
-    # # finds gradient for single "xy" set
-    # x = np.array([0, 1, 2, 3])
-    # y = np.array([4, 5])
-    # bias_gradients, weight_gradients = gnn.backprop(x, y)
-
-    # # updates weights and biases using gradients
-    # gnn.biases -= bias_gradients * 0.05
-    # gnn.weights -= weight_gradients * 0.05
-
-    # # creates gpu push kernel
-    # gnn.create_push_kernel()
-    
-    # # pushes data throught network using GPU
-    # gnn.load_GPU_data()
-
-    # x = np.array([[0, 1, 2, 3],
-    #               [4, 5, 6, 7]])
-
-    # y = gnn.push_GPU(x)
-
-    # # creates gpu backprop kernel
-    # gnn.create_backprop_kernel()
-
-    # # finds gradient for single batch of "xy" sets
-    # gnn.load_GPU_data()
-
-    # x = np.array([[0, 1, 2, 3],
-    #               [4, 5, 6, 7]])
-    
-    # y = np.array([[8, 9],
-    #               [10, 11]])
-
-    # bias_gradients, weight_gradients = gnn.backprop_GPU(x, y)
+            for neuron in self.weights:
+                for w in neuron:
+                    encoded = self._float2ascii(w, base)
+                    encoded = encoded.rjust(6, base[0])
+                    f.write(encoded)
+                f.write("\n")
