@@ -14,13 +14,15 @@ model.set_loss_function(MeanSquaredError())
 model.build()
 
 
-for _ in range(200):
+for i in range(5000):
     model._add_neuron_randomly()
 
-for _ in range(3000):
+for i in range(50000):
     model._add_connection_randomly()
 
 gnn.weights += np.random.uniform(-10e10, 10e10, gnn.weights.shape)
 gnn.biases += np.random.uniform(-10e10, 10e10, size=gnn.biases.shape)
 
 gnn.export(overwrite=True)
+
+"""Export size: 1.838 MB"""
