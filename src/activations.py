@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from math import tanh
 
 class Activation(ABC):
     def __init__(self, **kwargs):
@@ -71,4 +71,27 @@ class Identity(Activation):
             return 1
         return fn
 
+
+class Tanh(Activation):
+    def __init__(self):
+        super().__init__()
+
+    def __str__(self):
+        return "Tanh"
+
+    def fn(self, z):
+        return tanh(z)
+
+    def grad(self, z):
+        return 1 - tanh(z)**2
+
+    def cuda_fn(z):
+        def fn(z):
+            return tanh(z)
+        return fn
+    
+    def cuda_grad(z):
+        def fn(z):
+            return 1 - tanh(z)**2
+        return fn
 
