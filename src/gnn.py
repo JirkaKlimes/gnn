@@ -703,6 +703,7 @@ class Gnn:
             f.write(f"{'INPUTS':<20}{self.N_inputs}\n")
             f.write(f"{'OUTPUTS':<20}{self.N_outputs}\n")
             f.write(f"{'NEURONS':<20}{self.order.shape[0]}\n")
+            f.write(f"{'PARAMETERS':<20}{self.biases.shape[0] + np.count_nonzero(self.weights)}\n")
             f.write(f"{'HIDDEN ACT FN':<20}{self.hidden_act_fn}\n")
             f.write(f"{'OUTPUT ACT FN':<20}{self.output_act_fn}\n")
             f.write("\n")
