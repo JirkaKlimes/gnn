@@ -90,7 +90,7 @@ dataset = model.convert_dataset((x_train.reshape(SIZE, -1), y_train))
 print(f"Dataset laoded ✅")
 
 
-print(f"Training on {SIZE} images for mse loss of {TARGET_LOSS}")
+print(f"Training on {SIZE} images for mse of {TARGET_LOSS}")
 t1 = time.perf_counter()*1000
 model.train(dataset, 20, target_loss = TARGET_LOSS, vf=20,
             lr = 0.2, ls = -0.005, gr = 0.01, gd = 10,
