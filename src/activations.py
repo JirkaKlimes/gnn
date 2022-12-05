@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from math import tanh
 
+
 class Activation(ABC):
     def __init__(self, **kwargs):
         super().__init__()
@@ -95,3 +96,5 @@ class Tanh(Activation):
             return 1 - tanh(z)**2
         return fn
 
+
+ACTIVATION_FUNCTIONS = [Relu, Identity, Tanh]

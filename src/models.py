@@ -26,51 +26,6 @@ class Model(ABC):
     def allow_memory(self):
         self._memory_allowed = True
 
-    def set_hidden_act_function(self, func: Activation):
-        """
-        Sets atctivation that will be used for hiddne neurons
-        """
-
-        if self._isBuilt:
-            raise Exception(f"Cannot set activation function for an already build network.")
-
-        if self.hidden_act_fn is not None:
-            raise Exception(f"Hidden activation function was already set.")
-
-        self.hidden_act_fn = func
-
-    def set_output_act_function(self, func: Activation):
-        """
-        Sets atctivation that will be used for output neurons
-        """
-
-        if self._isBuilt:
-            raise Exception(f"Cannot set activation function for an already build network.")
-        
-        if self.output_act_fn is not None:
-            raise Exception(f"Output activation function was already set.")
-
-        self.output_act_fn = func
-
-    def set_loss_function(self, function: Loss):
-        """
-        Sets a function that will be used to computer network error and gradient
-        """
-        self.loss_fn = function
-
-    def _set_gnn_parameters(self):
-        if self.loss_fn is None:
-            raise Exception("Cannot build, model is missing loss function.")
-        self.gnn.loss_fn = self.loss_fn
-
-        if self.hidden_act_fn is None:
-            raise Exception("Cannot build, model doesn't have a hidden activation function.")
-        if self.output_act_fn is None:
-            raise Exception("Cannot build, model doesn't have a output activation function.")
-
-        self.gnn.hidden_act_fn = self.hidden_act_fn
-        self.gnn.output_act_fn = self.output_act_fn
-
     @abstractmethod
     def build(self, **kwargs):
         raise NotImplementedError
@@ -201,10 +156,10 @@ class UnnamedModel1(Model):
 
         return True
 
-    def build(self):
-        self._set_gnn_parameters()
-        self._fully_connect()
-        self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
+    def build(self, fully_connect):
+        if self._fully_connect:
+            self._fully_connect()
+            self.gnn.weights += np.random.normal(size=self.gnn.weights.shape)
         self.gnn.create_backprop_kernel()
         self.gnn.create_push_kernel()
         self._isBuilt = True
@@ -262,7 +217,7 @@ class UnnamedModel1(Model):
 
     def _validate(self):
         pred_y = self.gnn.push_GPU(self.train_x, self.sequence_lengths)
-        return self.loss_fn(self.train_y, pred_y)
+        return self.gnn.loss_fn(self.train_y, pred_y)
 
     def _grow_network(self, grow_ratio, memory_probability, new_order_probability):
         if not self._memory_allowed:

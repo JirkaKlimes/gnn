@@ -5,6 +5,7 @@ from math import ceil
 from pathlib import Path
 from datetime import datetime
 import ctypes
+from .activations import ACTIVATION_FUNCTIONS
 
 
 class Gnn:
@@ -25,8 +26,8 @@ class Gnn:
 
         self._initialize_network()
 
-        self._creation_date = datetime.now()
-        self._last_training_date = None
+        self._creation_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        self._last_training_date = 'Never'
 
     def _initialize_network(self):
         """
@@ -34,7 +35,7 @@ class Gnn:
         """
 
         # weighted sum of inputs (initialized as 0s)
-        self.z = np.zeros((self.N_inputs+self.N_outputs, 1))
+        self.z = np.zeros((self.N_inputs+self.N_outputs, 1), np.float32)
 
         # z passed through activation function (initialized as 0s)
         self.activations = None
@@ -54,13 +55,13 @@ class Gnn:
 
         # indicies of connected neurons
         # input -1 is not connected (inputs of input neurons should always be -1)
-        self.digraph = np.zeros((self.N_inputs+self.N_outputs, 1), dtype=np.int32) - 1
+        self.digraph = np.zeros((self.N_inputs+self.N_outputs, 1), dtype=np.float32) - 1
 
         # biases for the neurons
-        self.biases = np.zeros((self.N_inputs+self.N_outputs), np.float64)
+        self.biases = np.zeros((self.N_inputs+self.N_outputs), np.float32)
 
         # weights for the neurons
-        self.weights = np.zeros((self.N_inputs+self.N_outputs, 1), np.float64)
+        self.weights = np.zeros((self.N_inputs+self.N_outputs, 1), np.float32)
 
         # stores activation functions
         self.hidden_act_fn = None
@@ -87,11 +88,11 @@ class Gnn:
     def _expand_inputs(self, n: int = 1):
 
         # dds row of -1s to digraph
-        new_inputs = np.zeros((self.digraph.shape[0], n)) - 1
+        new_inputs = np.zeros((self.digraph.shape[0], n), np.float32) - 1
         self.digraph = np.hstack([self.digraph, new_inputs])
         
         # dds row of 0s to weights
-        new_weights = np.zeros((self.weights.shape[0], n))
+        new_weights = np.zeros((self.weights.shape[0], n), np.float32)
         self.weights = np.hstack([self.weights, new_weights])
 
     def _new_input_index(self, neuron_idx: int):
@@ -141,9 +142,9 @@ class Gnn:
         self.order = np.append(self.order, order)
         new_neuron_inputs = np.zeros((1, self.digraph.shape[1])) - 1
         self.digraph = np.vstack([self.digraph, new_neuron_inputs])
-        self.biases = np.append(self.biases, 0)
+        self.biases = np.append(self.biases, 0).astype(np.float32)
         new_neuron_weights = np.zeros((1, self.weights.shape[1]))
-        self.weights = np.vstack([self.weights, new_neuron_weights])
+        self.weights = np.vstack([self.weights, new_neuron_weights]).astype(np.float32)
 
         new_neuron_index = self.digraph.shape[0] - 1
 
@@ -680,6 +681,14 @@ class Gnn:
             n = n // base
         return res
 
+    @staticmethod
+    def _ascii2float(str, bchars):
+        n = 0
+        base = len(bchars)
+        for c in str:
+            n = n * base + bchars.find(c)
+        return ctypes.c_float.from_buffer(ctypes.c_uint32(n)).value
+
     def export(self, file: str = 'export.gnn', overwrite: bool = False):
         """
         Exports Growing Neural Netwrok into ascii document
@@ -704,15 +713,15 @@ class Gnn:
             f.write(f"{'OUTPUTS':<20}{self.N_outputs}\n")
             f.write(f"{'NEURONS':<20}{self.order.shape[0]}\n")
             f.write(f"{'PARAMETERS':<20}{self.biases.shape[0] + np.count_nonzero(self.weights)}\n")
-            f.write(f"{'HIDDEN ACT FN':<20}{self.hidden_act_fn}\n")
-            f.write(f"{'OUTPUT ACT FN':<20}{self.output_act_fn}\n")
+            f.write(f"{'HIDDEN_ACT_FN':<20}{self.hidden_act_fn}\n")
+            f.write(f"{'OUTPUT_ACT_FN':<20}{self.output_act_fn}\n")
             f.write("\n")
-            
+
             # writes important dates
             f.write("[DATES]\n")
-            f.write(f"{'CREATION DATE':<20}{self._creation_date}\n")
-            f.write(f"{'LAST TRAINING DATE':<20}{self._last_training_date}\n")
-            f.write(f"{'SAVE DATE':<20}{datetime.now()}\n")
+            f.write(f"{'CREATION_DATE':<20}{self._creation_date}\n")
+            f.write(f"{'LAST_TRAINING_DATE':<20}{self._last_training_date}\n")
+            f.write(f"{'SAVE_DATE':<20}{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}\n")
             f.write("\n")
 
             # writes metadata of neural network
@@ -760,3 +769,88 @@ class Gnn:
                     encoded = encoded.rjust(6, base[0])
                     f.write(encoded)
                 f.write("\n")
+
+    @staticmethod
+    def from_file(file: str = 'export.gnn', stdout_info: bool = True):
+        """
+        Imports .gnn file and creates Gnn object
+        """
+
+        file = Path(file).absolute()
+        if file.suffix != ".gnn": raise Exception(f"Wrong file type! Was: {file.suffix}, should be: .gnn")
+
+        if not file.is_file(): raise FileNotFoundError
+
+        parsed_data = {}
+
+        with open(file, 'r', encoding='ascii') as f:
+            lines = [l.rstrip('\n') for l in f.readlines()]
+            l = 0
+            n_lines = len(lines)
+            while l < n_lines:
+                match lines[l]:
+                    case '[GNN]':
+                        l += 1
+                        while lines[l]:
+                            data = [p.strip() for p in lines[l].split(" ")]
+                            parsed_data.update({data[0]: int(data[-1]) if data[-1].isdigit() else data[-1]})
+                            l += 1
+
+                    case '[DATES]':
+                        l += 1
+                        while lines[l]:
+                            data = [p.strip() for p in lines[l].split(" ")]
+                            parsed_data.update({data[0]: data[-1]})
+                            l += 1
+
+                    case '[METADATA]':
+
+                        gnn = Gnn(parsed_data['INPUTS'], parsed_data['OUTPUTS'])
+
+                        l += 1
+                        base = lines[l]
+                        neurons = []
+
+                        for _ in range(parsed_data['NEURONS']):
+                            l += 1
+                            numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
+                            neuron = list(map(lambda x: Gnn._ascii2float(x, base), numbers))
+                            neurons.append(neuron)
+
+                        max_len = max(map(len, neurons))
+                        arr = np.zeros((parsed_data['NEURONS'], max_len), np.float32) - 1
+
+                        for i, n in enumerate(neurons):
+                            arr[i, :len(n)] = n
+
+                        gnn.activations = arr[:, 0]
+                        gnn.order = arr[:, 1]
+                        gnn.digraph = arr[:, 2:]
+
+                        l += 1
+                        numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
+                        gnn.biases = np.array(list(map(lambda x: Gnn._ascii2float(x, base), numbers)), np.float32)
+
+                        neurons = []
+
+                        weights = np.zeros((parsed_data['NEURONS'], max_len-2), np.float32)
+                        for i in range(parsed_data['NEURONS']):
+                            l += 1
+                            numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
+                            weights[i] = np.array(list(map(lambda x: Gnn._ascii2float(x, base), numbers)))
+
+                        gnn.weights = weights
+
+                l += 1
+
+            gnn._creation_date = parsed_data['CREATION_DATE']
+            gnn._last_training_date = parsed_data['LAST_TRAINING_DATE']
+
+            for fn in ACTIVATION_FUNCTIONS:
+                fn = fn()
+                if str(fn) == parsed_data['HIDDEN_ACT_FN']:
+                    gnn.hidden_act_fn = fn
+                if str(fn) == parsed_data['OUTPUT_ACT_FN']:
+                    gnn.output_act_fn = fn
+
+        return gnn
