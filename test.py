@@ -35,14 +35,14 @@ print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
 print(f"Adding {N_NEURONS} neurons...")
 t1 = time.perf_counter()*1000
-for i in range(500):
+for i in range(N_NEURONS):
     model._add_neuron_randomly()
 print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
 
 print(f"Adding {N_CONNECTIONS} connections...")
 t1 = time.perf_counter()*1000
-for i in range(5000):
+for i in range(N_CONNECTIONS):
     model._add_connection_randomly()
 print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
