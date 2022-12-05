@@ -16,6 +16,9 @@ N_INPUTS = 5
 N_OUTPUTS = 5
 N_NEURONS = 500
 N_CONNECTIONS = 5000
+TARGET_LOSS = 0.05
+SIZE = 50
+
 
 print(f"Creating GNN with {N_INPUTS} inputs and {N_OUTPUTS} outputs...")
 t1 = time.perf_counter()*1000
@@ -76,7 +79,6 @@ model = UnnamedModel1(gnn)
 model.build(True)
 
 print(f"Loading MNIST dataset...")
-SIZE = 50
 (x_train, _y_train), (x_test, _y_test) = tf.keras.datasets.mnist.load_data()
 x_train = tf.keras.utils.normalize(x_train, axis=1)[:SIZE]
 _y_train = _y_train[:SIZE]
@@ -87,7 +89,6 @@ y_train[np.arange(_y_train.size), _y_train] = 1
 dataset = model.convert_dataset((x_train.reshape(SIZE, -1), y_train))
 print(f"Dataset laoded ✅")
 
-TARGET_LOSS = 0.1
 
 print(f"Training on {SIZE} images for mse loss of {TARGET_LOSS}")
 t1 = time.perf_counter()*1000
