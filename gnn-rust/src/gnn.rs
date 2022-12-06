@@ -25,7 +25,7 @@ pub struct Gnn {
 
     calculation_order: Vec<(usize, bool)>,
 
-    pub activations: Vec<f32>,
+    activations: Vec<f32>,
     order: Vec<f32>,
     digraph: Vec<Vec<usize>>,
     biases: Vec<f32>,
