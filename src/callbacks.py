@@ -72,5 +72,6 @@ class StdOutCallback(TrainingCallback):
             print(f"| Number of layers: {N_layers}")
             print(f"|=============================")
         else:
-            print(f"| Epoch: {epoch} | {loss_fn}: {round(loss, 5)} | Number of neurons: {N_neurons} | Number of layers: {N_layers}")
-            print(f"|=============================================================================================================")
+            msg = f"| Epoch: {epoch} | {loss_fn}: {round(loss, 5)} | Number of neurons: {N_neurons} | Number of layers: {N_layers}"
+            print(msg)
+            print(f"|{'='*(len(msg)-1)}")
