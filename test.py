@@ -14,8 +14,8 @@ warnings.filterwarnings('ignore')
 
 N_INPUTS = 5
 N_OUTPUTS = 5
-N_NEURONS = 500
-N_CONNECTIONS = 5000
+N_NEURONS = 1000
+N_CONNECTIONS = 10000
 TARGET_LOSS = 0.001
 SIZE = 50
 
@@ -46,7 +46,7 @@ print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 print(f"Adding {N_CONNECTIONS} connections...")
 t1 = time.perf_counter()*1000
 for i in range(N_CONNECTIONS):
-    model._add_connection_randomly()
+        model._add_connection_randomly()
 print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
 

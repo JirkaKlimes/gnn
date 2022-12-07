@@ -77,13 +77,19 @@ class Gnn:
             "biases": None
                         }
 
+        self._cached_order_values = sorted(set(self.order))[1:]
+        self._old_order_hash = hash(tuple(self.order))
+
     @property
     def number_of_neurons(self):
         return self.order.shape[0] - self.N_inputs
 
     @property
     def order_values(self):
-        return sorted(set(self.order))[1:]
+        if hash(tuple(self.order)) != self._old_order_hash:
+            self._old_order_hash = hash(tuple(self.order))
+            self._cached_order_values = sorted(set(self.order))[1:]
+        return self._cached_order_values
 
     def _expand_inputs(self, n: int = 1):
 
