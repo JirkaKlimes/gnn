@@ -7,9 +7,8 @@
 * New neurons and connection can be formed while learning
 * Dead neurons are removed (ReLU's zero gradient)
 * No need to specify number of layers/neurons when creating the network
+* Rust library for fast computations on trained model (aprox. 100x faster that python)
 
 ## To-Do
 * Implement Adam optimizer
 * Automatically remove dead neurons
-* Method for exporting gnn
-* Create Rust library for fast computation on trained model
