@@ -197,4 +197,9 @@ impl Gnn {
 
         self.activations[self.n_inputs as usize..(self.n_inputs + self.n_outputs) as usize].to_vec()
     }
+
+    pub fn export(){
+        
+    }
+
 }
