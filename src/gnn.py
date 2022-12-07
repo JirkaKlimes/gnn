@@ -670,14 +670,13 @@ class Gnn:
             self.gpu_data["bias_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.biases.shape)))
             self.gpu_data["weight_grads"] = cuda.to_device(np.zeros((batch_size, 2, *self.weights.shape)))
 
-    def _float2ascii(self, float, bchars):
+    def _float2string(self, float, bchars):
         """
-        Converts float to ascii with perfect accuracy and low char count
+        Converts float to string with no loss in accuracy and low char count
         """
         # we move buffer of float to uint adress and get it's value
         n = ctypes.c_uint32.from_buffer(ctypes.c_float(float)).value
 
-        # simple base conversion of unsigned integer
         base = len(bchars)
         if n == 0: return bchars[0]
         res = ''
@@ -688,11 +687,15 @@ class Gnn:
         return res
 
     @staticmethod
-    def _ascii2float(str, bchars):
+    def _string2float(str, bchars):
+        """
+        Inverse function of "_float2string"
+        """
         n = 0
         base = len(bchars)
         for c in str:
             n = n * base + bchars.find(c)
+
         return ctypes.c_float.from_buffer(ctypes.c_uint32(n)).value
 
     def export(self, file: str = 'export.gnn', overwrite: bool = False):
@@ -705,6 +708,7 @@ class Gnn:
         # add .gnn suffix if it isn't present
         file = file if file.suffix == ".gnn" else file.with_suffix(file.suffix + ".gnn")
 
+        # checks if file exists
         if file.is_file() and not overwrite:
             raise FileExistsError
 
@@ -744,13 +748,13 @@ class Gnn:
             for neuron in range(self.order.shape[0]):
 
                 # converts neurons activation, order and all inputs to ascii
-                encoded = self._float2ascii(self.activations[neuron], base)
+                encoded = self._float2string(self.activations[neuron], base)
 
                 # justifies for fixed length
                 encoded = encoded.rjust(6, base[0])
 
                 f.write(encoded)
-                encoded = self._float2ascii(self.order[neuron], base)
+                encoded = self._float2string(self.order[neuron], base)
                 encoded = encoded.rjust(6, base[0])
                 f.write(encoded)
                 for input in self.digraph[neuron]:
@@ -758,20 +762,24 @@ class Gnn:
                     # we dont need to write not connected inputs
                     if input == -1: break
 
-                    encoded = self._float2ascii(input, base)
+                    encoded = self._float2string(input, base)
                     encoded = encoded.rjust(6, base[0])
                     f.write(encoded)
                 f.write("\n")
 
+            # writes all biases on single line
             for bias in self.biases:
-                encoded = self._float2ascii(bias, base)
+                encoded = self._float2string(bias, base)
                 encoded = encoded.rjust(6, base[0])
                 f.write(encoded)
             f.write("\n")
 
+            # loops over every neuron
             for neuron in self.weights:
+                
+                # writes all weight of neuron on a single line
                 for w in neuron:
-                    encoded = self._float2ascii(w, base)
+                    encoded = self._float2string(w, base)
                     encoded = encoded.rjust(6, base[0])
                     f.write(encoded)
                 f.write("\n")
@@ -783,80 +791,102 @@ class Gnn:
         """
 
         file = Path(file).absolute()
+
+        # checks file type
         if file.suffix != ".gnn": raise Exception(f"Wrong file type! Was: {file.suffix}, should be: .gnn")
 
         if not file.is_file(): raise FileNotFoundError
 
+        # dict to store info about networks
         parsed_data = {}
 
+        # reads file and split lines into list
         with open(file, 'r', encoding='ascii') as f:
             lines = [l.rstrip('\n') for l in f.readlines()]
-            l = 0
-            n_lines = len(lines)
-            while l < n_lines:
-                match lines[l]:
-                    case '[GNN]':
+
+        # index of current line
+        l = 0
+
+        n_lines = len(lines)
+        while l < n_lines:
+            match lines[l]:
+                case '[GNN]':
+                    l += 1
+                    while lines[l]:
+                        # reads main info about the networks
+                        data = [p.strip() for p in lines[l].split(" ")]
+                        
+                        # adds key: value pair to parsed data
+                        parsed_data.update({data[0]: int(data[-1]) if data[-1].isdigit() else data[-1]})
                         l += 1
-                        while lines[l]:
-                            data = [p.strip() for p in lines[l].split(" ")]
-                            parsed_data.update({data[0]: int(data[-1]) if data[-1].isdigit() else data[-1]})
-                            l += 1
 
-                    case '[DATES]':
+                case '[DATES]':
+                    l += 1
+                    while lines[l]:
+                        # reads dates about the network
+                        data = [p.strip() for p in lines[l].split(" ")]
+                        parsed_data.update({data[0]: data[-1]})
                         l += 1
-                        while lines[l]:
-                            data = [p.strip() for p in lines[l].split(" ")]
-                            parsed_data.update({data[0]: data[-1]})
-                            l += 1
 
-                    case '[METADATA]':
+                case '[METADATA]':
+                    
+                    # create Gnn object
+                    gnn = Gnn(parsed_data['INPUTS'], parsed_data['OUTPUTS'])
 
-                        gnn = Gnn(parsed_data['INPUTS'], parsed_data['OUTPUTS'])
+                    l += 1
+                    base = lines[l]
+                    neurons = []
 
+                    # reads activation, order and inputs of every neuron
+                    for _ in range(parsed_data['NEURONS']):
                         l += 1
-                        base = lines[l]
-                        neurons = []
 
-                        for _ in range(parsed_data['NEURONS']):
-                            l += 1
-                            numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
-                            neuron = list(map(lambda x: Gnn._ascii2float(x, base), numbers))
-                            neurons.append(neuron)
+                        # split line to chunks of 6 characters
+                        numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
 
-                        max_len = max(map(len, neurons))
-                        arr = np.zeros((parsed_data['NEURONS'], max_len), np.float32) - 1
+                        # converts string representations of all numbers to float
+                        neuron = list(map(lambda x: Gnn._string2float(x, base), numbers))
+                        neurons.append(neuron)
 
-                        for i, n in enumerate(neurons):
-                            arr[i, :len(n)] = n
+                    # creates array to store activation, order and inputs
+                    max_len = max(map(len, neurons))
+                    arr = np.zeros((parsed_data['NEURONS'], max_len), np.float32) - 1
+                    for i, n in enumerate(neurons):
+                        arr[i, :len(n)] = n
 
-                        gnn.activations = arr[:, 0]
-                        gnn.order = arr[:, 1]
-                        gnn.digraph = arr[:, 2:]
+                    # loads activations, order and digraph
+                    gnn.activations = arr[:, 0]
+                    gnn.order = arr[:, 1]
+                    gnn.digraph = arr[:, 2:]
 
+                    l += 1
+
+                    # loads biases
+                    numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
+                    gnn.biases = np.array(list(map(lambda x: Gnn._string2float(x, base), numbers)), np.float32)
+
+                    # loads weights
+                    neurons = []
+                    weights = np.zeros((parsed_data['NEURONS'], max_len-2), np.float32)
+                    for i in range(parsed_data['NEURONS']):
                         l += 1
                         numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
-                        gnn.biases = np.array(list(map(lambda x: Gnn._ascii2float(x, base), numbers)), np.float32)
+                        weights[i] = np.array(list(map(lambda x: Gnn._string2float(x, base), numbers)))
 
-                        neurons = []
+                    gnn.weights = weights
 
-                        weights = np.zeros((parsed_data['NEURONS'], max_len-2), np.float32)
-                        for i in range(parsed_data['NEURONS']):
-                            l += 1
-                            numbers = list(map(''.join, zip(*[iter(lines[l])]*6)))
-                            weights[i] = np.array(list(map(lambda x: Gnn._ascii2float(x, base), numbers)))
+            l += 1
 
-                        gnn.weights = weights
+        # sets dates
+        gnn._creation_date = parsed_data['CREATION_DATE']
+        gnn._last_training_date = parsed_data['LAST_TRAINING_DATE']
 
-                l += 1
-
-            gnn._creation_date = parsed_data['CREATION_DATE']
-            gnn._last_training_date = parsed_data['LAST_TRAINING_DATE']
-
-            for fn in ACTIVATION_FUNCTIONS:
-                fn = fn()
-                if str(fn) == parsed_data['HIDDEN_ACT_FN']:
-                    gnn.hidden_act_fn = fn
-                if str(fn) == parsed_data['OUTPUT_ACT_FN']:
-                    gnn.output_act_fn = fn
+        # sets activation functions
+        for fn in ACTIVATION_FUNCTIONS:
+            fn = fn()
+            if str(fn) == parsed_data['HIDDEN_ACT_FN']:
+                gnn.hidden_act_fn = fn
+            if str(fn) == parsed_data['OUTPUT_ACT_FN']:
+                gnn.output_act_fn = fn
 
         return gnn
