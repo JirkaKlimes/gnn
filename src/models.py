@@ -35,10 +35,10 @@ class Model(ABC):
         raise NotImplementedError
 
 
-class UnnamedModel1(Model):
+class LINC(Model):
     def __init__(self, gnn: Gnn):
         """
-        A <insert some unique and cool name here> Model that:
+        A LINC (Learning with Incremental Neuron Creation) Model that:
             - adds new neurons and connections when loss stops droping
             - initializes weights diferently to ones that exists so they can learn new features
             - adds momentum to gradient for lower chance of getting stuck in local minima
@@ -51,7 +51,7 @@ class UnnamedModel1(Model):
         super().__init__()
 
     def __str__(self):
-        return "Unnamed Model 1"
+        return "LINC"
 
     def _fully_connect(self):
         """
