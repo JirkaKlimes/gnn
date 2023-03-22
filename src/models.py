@@ -40,8 +40,8 @@ class LINC(Model):
         """
         A LINC (Learning with Incremental Neuron Creation) Model that:
             - adds new neurons and connections when loss stops droping
-            - initializes weights diferently to ones that exists so they can learn new features
-            - adds momentum to gradient for lower chance of getting stuck in local minima
+            TODO - initializes weights diferently to ones that exists so they can learn new features
+            TODO - adds momentum to gradient for lower chance of getting stuck in local minima
         """
 
         self.gnn = gnn
