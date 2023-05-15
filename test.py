@@ -1,7 +1,7 @@
 from src.gnn import Gnn
 from src.activations import Relu, Identity
 from src.losses import MeanSquaredError
-from src.models import UnnamedModel1
+from src.models import LINC
 from src.callbacks import StdOutCallback
 
 import numpy as np
@@ -31,7 +31,7 @@ print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
 print("Building model...")
 t1 = time.perf_counter()*1000
-model = UnnamedModel1(gnn)
+model = LINC(gnn)
 model.build(True)
 print(f"Time taken: {(time.perf_counter()*1000 - t1):02f}ms ✅\n")
 
@@ -75,7 +75,7 @@ gnn = Gnn(784, 10)
 gnn.hidden_act_fn = Relu()
 gnn.output_act_fn = Identity()
 gnn.loss_fn = MeanSquaredError()
-model = UnnamedModel1(gnn)
+model = LINC(gnn)
 model.build(True)
 
 print(f"Loading MNIST dataset...")
