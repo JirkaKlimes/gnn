@@ -69,6 +69,12 @@ class GNN:
         wf: VALUE_DTYPE, wt: VALUE_DTYPE, b: VALUE_DTYPE,
         func: Activation, m: bool = False
     ):
+        wit = to_idx - self.n_inputs
+        wif = from_idx - self.n_inputs
+
+        if (from_idx >= self.n_inputs and order == self.neuron_order[wif]) or \
+                order == self.neuron_order[wit]:
+            raise SameOrderException(wif, 'not-added', self.neuron_order[wif])
 
         self.add_activation(func)
 
