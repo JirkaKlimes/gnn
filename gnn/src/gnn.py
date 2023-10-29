@@ -17,8 +17,8 @@ class GNN:
         self,
         n_inputs: int,
         outputs: List[Activation],
-        value_dtype: np.dtype = np.float32,
-        index_dtype: np.dtype = np.uint32
+        value_dtype: np.dtype = VALUE_DTYPE,
+        index_dtype: np.dtype = INDEX_DTYPE
     ):
         self.n_inputs = n_inputs
         self.n_outputs = len(outputs)
