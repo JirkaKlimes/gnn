@@ -125,17 +125,29 @@ class GNN:
                        weight: VALUE_DTYPE, recurrent: Optional[bool] = False
                        ):
 
+        wit = to_idx - self.n_in
+        wif = from_idx - self.n_in
+
         if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
             raise CycleConnection(from_idx, to_idx)
 
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
 
-        if self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
-            # TODO: split layer in this case
-            raise NotImplementedError()
-
-        wit = to_idx - self.n_in
+        if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
+            li = self.neuron_layers[wit]
+            self.layer_sizes[li] -= 1
+            self.layer_sizes = np.insert(self.layer_sizes, li, 1)
+            p = self.layer_pointers[li]
+            self.layer_pointers = np.insert(
+                self.layer_pointers, li, p)
+            self.layer_pointers[li + 1] += 1
+            layers = self.neuron_indices[p:self.layer_sizes[li] + 1]
+            layers = np.delete(layers, np.where(layers == wif))
+            layers = np.insert(layers, 0, wif)
+            self.neuron_indices[p:self.layer_sizes[li] + 1] = layers
+            self.neuron_layers[np.where(self.neuron_layers >= li)] += 1
+            self.neuron_layers[wif] = li
 
         self.conn_pointers[wit + 1:] += 1
         p = self.conn_pointers[wit]
