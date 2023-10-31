@@ -1,32 +1,28 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractstaticmethod
 
 
 class Activation(ABC):
-    def __init__(self, **kwargs):
-        super().__init__()
 
-    @abstractmethod
-    def fn(self, z: float) -> float:
+    @abstractstaticmethod
+    def fn(z: float) -> float:
         raise NotImplementedError
 
-    __call__ = fn
-
-    @abstractmethod
-    def grad(self, z: float) -> float:
+    @abstractstaticmethod
+    def grad(z: float) -> float:
         raise NotImplementedError
 
 
 class Linear(Activation):
-    def fn(self, z: float) -> float:
+    def fn(z: float) -> float:
         return z
 
-    def grad(self, z: float) -> float:
+    def grad(z: float) -> float:
         return 1
 
 
 class ReLU(Activation):
-    def fn(self, z: float) -> float:
+    def fn(z: float) -> float:
         return max(0, z)
 
-    def grad(self, z: float) -> float:
+    def grad(z: float) -> float:
         return float(z > 0)

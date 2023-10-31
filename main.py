@@ -42,7 +42,7 @@ def export_gnn():
             f = gnn.conn_indices[j]
             net.add_edge(int(f), i + gnn.n_in)
 
-    net.save_graph('gnn.html')
+    net.save_graph('graph.html')
 
 
 n_inputs = 4
@@ -55,6 +55,6 @@ gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1, True)
 # print_gnn()
 gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 1, False)
 # print_gnn()
-# gnn.add_connection(7, 6, 0.5)
+gnn.add_connection(7, 6, 0.5)
 print_gnn()
 export_gnn()
