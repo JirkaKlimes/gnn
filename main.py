@@ -35,12 +35,14 @@ def export_gnn():
         net.add_node(i, color='#f45b5c', label=str(i))
 
     for i in range(gnn.n_in + gnn.n_out, gnn.n_in + len(gnn)):
-        net.add_node(i, color='#4ad0df', label=str(i))
+        m = gnn.multiplicative[i - gnn.n_in]
+        net.add_node(i, color='#4ad0df', label=f'(M) {i}' if m else str(i))
 
     for i, (p, c) in enumerate(zip(gnn.conn_pointers, gnn.conn_counts)):
         for j in range(p, p + c):
-            f = gnn.conn_indices[j]
-            net.add_edge(int(f), i + gnn.n_in)
+            f, w = gnn.conn_indices[j], gnn.conn_weights[j]
+
+            net.add_edge(int(f), i + gnn.n_in, label=str(w))
 
     net.save_graph('graph.html')
 
@@ -51,10 +53,12 @@ outputs = [ReLU, Linear]
 gnn = GNN(n_inputs, outputs)
 
 # print_gnn()
-gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1, True)
+gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1.2, True)
 # print_gnn()
-gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 1, False)
+gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 0.5, False)
 # print_gnn()
 gnn.add_connection(7, 6, 0.5)
+states = gnn.push([1, 2, 3, 4])
 print_gnn()
+print(states)
 export_gnn()

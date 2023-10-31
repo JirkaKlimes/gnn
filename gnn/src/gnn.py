@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Union, Dict
 from gnn.src.activations import Activation, Linear
 
 
@@ -32,7 +32,8 @@ class GNN:
 
         self.max_index = np.iinfo(self.indexT).max
 
-        self.funcs = {Linear: 0}
+        self.funcs: Dict[Activation: int] = {Linear: 0}
+        self.__funcs_T: List[Activation] = []
         list(map(self.add_activation, outputs))
 
         self.neuron_functions = np.uint8([self.funcs[f] for f in outputs])
@@ -61,6 +62,16 @@ class GNN:
     @property
     def n_connections(self):
         return self.conn_weights.size
+
+    @property
+    def is_recurrent(self):
+        return np.any(self.conn_recurrent)
+
+    @property
+    def funcs_T(self):
+        if not (self.__funcs_T is None or len(self.__funcs_T) == len(self.funcs)):
+            self.__funcs_T = list(self.funcs.keys())
+        return self.__funcs_T
 
     def add_activation(self, func: Activation):
         if func not in self.funcs:
@@ -162,3 +173,36 @@ class GNN:
         self.conn_recurrent = np.insert(
             self.conn_recurrent, p + self.conn_counts[wit], recurrent)
         self.conn_counts[wit] += 1
+
+    def push(self, x: Union[np.ndarray, list], prev_states: Optional[Union[np.ndarray, list]] = None, return_states: Optional[bool] = False):
+        if isinstance(x, list):
+            x = np.array(x, self.valueT)
+
+        assert x.size == self.n_in
+
+        if prev_states is None and self.is_recurrent:
+            prev_states = np.zeros(len(self), dtype=self.valueT)
+
+        states = np.concatenate([x, np.empty(len(self), dtype=self.valueT)])
+        for layer_s, layer_p in zip(self.layer_sizes, self.layer_pointers):
+            for p in range(layer_p, layer_p + layer_s):
+                n = self.neuron_indices[p]
+                conn_c, conn_p = self.conn_counts[n], self.conn_pointers[n]
+                f, b = self.neuron_functions[n], self.neuron_biases[n]
+                if self.multiplicative[n]:
+                    z = b
+                    for c in range(conn_p, conn_p + conn_c):
+                        r, w, i = self.conn_recurrent[c], self.conn_weights[c], self.conn_indices[c]
+                        z *= ((prev_states if r else states)[i] + w)
+                    states[n + self.n_in] = self.funcs_T[f].fn(z)
+                else:
+                    z = b
+                    for c in range(conn_p, conn_p + conn_c):
+                        r, w, i = self.conn_recurrent[c], self.conn_weights[c], self.conn_indices[c]
+                        z += ((prev_states if r else states)[i] * w)
+                    states[n + self.n_in] = self.funcs_T[f].fn(z)
+
+        if return_states:
+            return states
+
+        return states[self.n_in:self.n_in + self.n_out]

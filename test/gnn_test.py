@@ -71,6 +71,13 @@ class GNNTest(unittest.TestCase):
         except CycleConnection:
             pass
 
+    def test_forward_propagation_cpu(self):
+        gnn = GNN(4, [ReLU, Linear])
+        gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1.2, True)
+        gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 0.5, False)
+        gnn.add_connection(7, 6, 0.5)
+        assert (gnn.push([1, 2, 3, 4]) == np.float32([0.58559996, 0])).all()
+
 
 if __name__ == "__main__":
     unittest.main()
