@@ -84,11 +84,11 @@ class GNN:
                    layer: Optional[INDEX_DTYPE] = None
                    ):
 
-        if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
-            raise CycleConnection(from_idx, to_idx)
-
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
+
+        if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
+            raise CycleConnection(from_idx, to_idx)
 
         mid_idx = len(self)
         self.__add_unconnected_neuron(function, bias, multiplicative)
@@ -108,8 +108,11 @@ class GNN:
             self.neuron_layers = np.append(self.neuron_layers, li)
             self.neuron_layers[self.layer_pointers[li:]] += 1
         else:
-            # if layers found, pick the smallest one
-            li = np.argmin(sizes) + lf
+            # if layers found, and no specific set, pick the smallest one
+            if layer is not None and layer in range(lf, lf + len(sizes)):
+                li = layer
+            else:
+                li = np.argmin(sizes) + lf
             self.neuron_indices = np.insert(
                 self.neuron_indices, self.layer_pointers[li] + self.layer_sizes[li], mid_idx)
             self.layer_sizes[li] += 1

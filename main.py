@@ -2,11 +2,6 @@ from gnn import GNN
 from gnn import ReLU, Linear
 from pyvis.network import Network
 
-n_inputs = 4
-outputs = [ReLU, Linear]
-
-gnn = GNN(n_inputs, outputs)
-
 
 def print_gnn():
     print('=' * 20)
@@ -50,11 +45,16 @@ def export_gnn():
     net.save_graph('gnn.html')
 
 
-print_gnn()
+n_inputs = 4
+outputs = [ReLU, Linear]
+
+gnn = GNN(n_inputs, outputs)
+
+# print_gnn()
 gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1, True)
-print_gnn()
+# print_gnn()
 gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 1, False)
-print_gnn()
-gnn.add_connection(7, 6, 0.5)
+# print_gnn()
+# gnn.add_connection(7, 6, 0.5)
 print_gnn()
 export_gnn()
