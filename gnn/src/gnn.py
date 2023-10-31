@@ -134,6 +134,7 @@ class GNN:
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
 
+        # if neurons reside in the same layer, we have to split it
         if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
             li = self.neuron_layers[wit]
             self.layer_sizes[li] -= 1
