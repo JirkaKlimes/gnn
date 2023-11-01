@@ -180,21 +180,23 @@ class GNN:
         wit = to_idx - self.n_in
         wif = from_idx - self.n_in
 
-        if from_idx == to_idx:
+        if not recurrent and from_idx == to_idx:
             raise CycleConnection(from_idx, to_idx)
 
-        if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
+        if not recurrent and from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
             raise CycleConnection(from_idx, to_idx)
 
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
 
         p = self.conn_pointers[wit]
-        if from_idx in self.conn_indices[p:p + self.conn_counts[wit]]:
+        conns = self.conn_indices[p:p + self.conn_counts[wit]]
+        collision = np.where(conns == from_idx)[0]
+        if collision.size == 2 or (collision.size == 1 and self.conn_recurrent[collision] != recurrent):
             raise ConnectionAlreadyExists(from_idx, to_idx)
 
         # if neurons reside in the same layer, we have to split it
-        if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
+        if not recurrent and from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
             li = self.neuron_layers[wit]
             p = self.layer_pointers[li]
             layers = self.neuron_indices[p:p + self.layer_sizes[li]]
