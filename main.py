@@ -1,6 +1,8 @@
 from gnn import GNN
 from gnn import ReLU, Linear
+from gnn import CycleConnection, InputConnection, NonExistingNeuron
 from pyvis.network import Network
+import random
 
 
 def print_gnn():
@@ -52,13 +54,36 @@ outputs = [ReLU, Linear]
 
 gnn = GNN(n_inputs, outputs)
 
+# conns = [(2, 5), (3, 6), (2, 6), (1, 5), (0, 5), (6, 5),
+#          (7, 6), (12, 4), (13, 5), (12, 9), (7, 8)]
+
+# for i, j in conns:
+#     gnn.add_neuron(i, 1, j, 1, ReLU, 1, False)
+#     print_gnn()
+# export_gnn()
+
+# gnn.add_neuron(1, 1, 5, 1, ReLU, 1, False)
+# gnn.add_neuron(3, 1, 4, 1, ReLU, 1, False)
+# gnn.add_neuron(2, 1, 4, 1, ReLU, 1, False)
+# gnn.add_neuron(4, 1, 5, 1, ReLU, 1, False)
 # print_gnn()
-gnn.add_neuron(0, 0.2, 4, -0.3, ReLU, 1.2, True)
-# print_gnn()
-gnn.add_neuron(0, 0.7, 4, 1.1, ReLU, 0.5, False)
-# print_gnn()
-gnn.add_connection(7, 6, 0.5)
-states = gnn.push([1, 2, 3, 4])
+
+conns = []
+for _ in range(1000):
+    from_indices = [
+        *range(gnn.n_in), *(gnn.neuron_indices[:-int(gnn.layer_sizes[-1])] + gnn.n_in)]
+    to_indices = [*(gnn.neuron_indices + gnn.n_in)]
+
+    fi = random.choice(from_indices)
+    ti = random.choice(to_indices)
+    # print_gnn()
+    print(fi, ti)
+    try:
+        gnn.add_neuron(fi, 1, ti, 1, ReLU, 1, False)
+        conns.append((fi, ti))
+    except CycleConnection:
+        pass
+    print(conns)
+
 print_gnn()
-print(states)
 export_gnn()

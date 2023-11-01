@@ -15,6 +15,12 @@ class InputConnection(Exception):
         super().__init__(msg)
 
 
+class NonExistingNeuron(Exception):
+    def __init__(self, from_idx, to_idx) -> None:
+        msg = f"Cannot connect {from_idx} -> {to_idx} (doesn't exist)"
+        super().__init__(msg)
+
+
 class GNN:
     VALUE_DTYPE = np.float32
     INDEX_DTYPE = np.uint32
@@ -95,6 +101,12 @@ class GNN:
                    layer: Optional[INDEX_DTYPE] = None
                    ):
 
+        if from_idx == to_idx:
+            raise CycleConnection(from_idx, to_idx)
+
+        if from_idx >= len(self) + self.n_in or to_idx >= len(self) + self.n_in:
+            raise NonExistingNeuron(from_idx, to_idx)
+
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
 
@@ -108,16 +120,25 @@ class GNN:
             self.neuron_layers[from_idx - self.n_in] + 1
         lt = self.neuron_layers[to_idx - self.n_in] + 1
         sizes = self.layer_sizes[lf: min(lt, self.layer_sizes.size - 1)]
-        if not sizes.size:
+        if lf == lt:
+            li = self.neuron_layers[to_idx - self.n_in]
+            self.neuron_indices = np.insert(
+                self.neuron_indices, self.layer_pointers[li] + self.layer_sizes[li], mid_idx)
+            self.layer_sizes[li] += 1
+            self.layer_pointers[li + 1:] += 1
+            self.neuron_layers = np.append(self.neuron_layers, li)
+        elif not sizes.size:
             # if no layer found, create new
             li = self.neuron_layers[to_idx - self.n_in]
             self.layer_sizes = np.insert(self.layer_sizes, li, 1)
             self.layer_pointers = np.insert(
                 self.layer_pointers, li, self.layer_pointers[li])
             self.layer_pointers[li + 1:] += 1
-            self.neuron_indices = np.insert(self.neuron_indices, li, mid_idx)
+            self.neuron_indices = np.insert(
+                self.neuron_indices, self.layer_pointers[li] + self.layer_sizes[li] - 1, mid_idx)
             self.neuron_layers = np.append(self.neuron_layers, li)
-            self.neuron_layers[self.layer_pointers[li:]] += 1
+            self.neuron_layers[np.where(self.neuron_layers >= li)] += 1
+            self.neuron_layers[mid_idx] = li
         else:
             # if layers found, and no specific set, pick the smallest one
             if layer is not None and layer in range(lf, lf + len(sizes)):
@@ -151,18 +172,18 @@ class GNN:
         # if neurons reside in the same layer, we have to split it
         if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
             li = self.neuron_layers[wit]
+            p = self.layer_pointers[li]
+            layers = self.neuron_indices[p:p + self.layer_sizes[li]]
+            layers = np.delete(layers, np.where(layers == wif))
+            layers = np.insert(layers, 0, wif)
+            self.neuron_indices[p:p + self.layer_sizes[li]] = layers
+            self.neuron_layers[np.where(self.neuron_layers >= li)] += 1
+            self.neuron_layers[wif] = li
             self.layer_sizes[li] -= 1
             self.layer_sizes = np.insert(self.layer_sizes, li, 1)
-            p = self.layer_pointers[li]
             self.layer_pointers = np.insert(
                 self.layer_pointers, li, p)
             self.layer_pointers[li + 1] += 1
-            layers = self.neuron_indices[p:self.layer_sizes[li] + 1]
-            layers = np.delete(layers, np.where(layers == wif))
-            layers = np.insert(layers, 0, wif)
-            self.neuron_indices[p:self.layer_sizes[li] + 1] = layers
-            self.neuron_layers[np.where(self.neuron_layers >= li)] += 1
-            self.neuron_layers[wif] = li
 
         self.conn_pointers[wit + 1:] += 1
         p = self.conn_pointers[wit]
