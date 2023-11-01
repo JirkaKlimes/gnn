@@ -1,8 +1,9 @@
 from gnn import GNN
 from gnn import ReLU, Linear
-from gnn import CycleConnection, InputConnection, NonExistingNeuron
+from gnn import CycleConnection, InputConnection, NonExistingNeuron, ConnectionAlreadyExists
 from pyvis.network import Network
 import random
+import time
 
 
 def print_gnn():
@@ -56,7 +57,7 @@ gnn = GNN(n_inputs, outputs)
 
 
 conns = []
-NUM = 1000
+NUM = 100
 for i in range(NUM):
     from_indices = [
         *range(gnn.n_in), *(gnn.neuron_indices[:-int(gnn.layer_sizes[-1])] + gnn.n_in)]
@@ -65,7 +66,12 @@ for i in range(NUM):
     fi = random.choice(from_indices)
     ti = random.choice(to_indices)
     try:
-        gnn.add_neuron(fi, 1, ti, 1, ReLU, 1, False)
+        gnn.add_neuron(
+            fi, random.normalvariate(),
+            ti, random.normalvariate(),
+            ReLU, random.normalvariate(),
+            False,
+        )
     except CycleConnection:
         pass
     print(f'Adding {NUM} neurons: {100*(i+1)/NUM:.2f}%', end='\r')
@@ -80,11 +86,19 @@ for i in range(NUM):
     fi = random.choice(from_indices)
     ti = random.choice(to_indices)
     try:
-        gnn.add_connection(fi, ti, 1, False)
+        gnn.add_connection(fi, ti, random.normalvariate(), False)
     except CycleConnection:
+        pass
+    except ConnectionAlreadyExists:
         pass
     print(f'Adding {NUM} connections: {100*(i+1)/NUM:.2f}%', end='\r')
 print(f'Adding {NUM} connections finished!')
 
 print_gnn()
+st = time.monotonic()
+print(gnn.push([1, 2, 3, 4]))
+et = time.monotonic()
+print(f'Time taken: {(et-st)*1e3:.2f}ms')
+# 41ms for 10k neurons and aprox. 100k connections
+print(gnn)
 export_gnn()

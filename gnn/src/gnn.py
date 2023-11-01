@@ -21,6 +21,12 @@ class NonExistingNeuron(Exception):
         super().__init__(msg)
 
 
+class ConnectionAlreadyExists(Exception):
+    def __init__(self, from_idx, to_idx) -> None:
+        msg = f"Cannot connect {from_idx} -> {to_idx} (already connected)"
+        super().__init__(msg)
+
+
 class GNN:
     VALUE_DTYPE = np.float32
     INDEX_DTYPE = np.uint32
@@ -58,6 +64,13 @@ class GNN:
         self.conn_indices = np.empty(0, dtype=self.indexT)
         self.conn_recurrent = np.empty(0, bool)
 
+    def __str__(self):
+        return (f"Inputs: {self.n_in}\n"
+                f"Outputs: {self.n_out}\n"
+                f"Neurons: {self.n_neurons}\n"
+                f"Connections: {self.n_connections}\n"
+                f"Layers: {self.n_layers}")
+
     def __len__(self):
         return self.multiplicative.size
 
@@ -72,6 +85,10 @@ class GNN:
     @property
     def is_recurrent(self):
         return np.any(self.conn_recurrent)
+
+    @property
+    def n_layers(self):
+        return self.layer_sizes.size
 
     @property
     def funcs_T(self):
@@ -163,11 +180,18 @@ class GNN:
         wit = to_idx - self.n_in
         wif = from_idx - self.n_in
 
+        if from_idx == to_idx:
+            raise CycleConnection(from_idx, to_idx)
+
         if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] > self.neuron_layers[to_idx - self.n_in]:
             raise CycleConnection(from_idx, to_idx)
 
         if to_idx < self.n_in:
             raise InputConnection(from_idx, to_idx)
+
+        p = self.conn_pointers[wit]
+        if from_idx in self.conn_indices[p:p + self.conn_counts[wit]]:
+            raise ConnectionAlreadyExists(from_idx, to_idx)
 
         # if neurons reside in the same layer, we have to split it
         if from_idx >= self.n_in and self.neuron_layers[from_idx - self.n_in] == self.neuron_layers[to_idx - self.n_in]:
